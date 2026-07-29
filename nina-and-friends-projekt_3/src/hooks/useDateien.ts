@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 export interface DateiEintrag {
   id: string;
+  art: string;
   bereich: string;
   titel: string;
   dateiname: string;

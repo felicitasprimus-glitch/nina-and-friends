@@ -23,6 +23,7 @@ import {
   Video,
 } from "lucide-react";
 import { alleKategorien, getCategory } from "../data/content";
+import { supabaseAktiv, supabaseUpload, base64ZuBlob } from "../lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 /* ---------- Typen ---------- */
@@ -508,6 +509,32 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
     }
   };
 
+  const seiteLoeschen = async () => {
+    if (!seite) return;
+    if (
+      !window.confirm(
+        "Die ganze Seite wirklich loeschen? Das kann nicht rueckgaengig gemacht werden."
+      )
+    )
+      return;
+    setSpeichert(true);
+    setFehler("");
+    try {
+      for (const b of bausteine) {
+        if (b.id) {
+          await api("bausteine?id=" + encodeURIComponent(b.id), { method: "DELETE" });
+        }
+      }
+      setSeite(null);
+      setBausteine([]);
+      await seitenLaden();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Loeschen fehlgeschlagen.");
+    } finally {
+      setSpeichert(false);
+    }
+  };
+
   const hochladen = async (id: string, datei: File) => {
     setFehler("");
     if (datei.size > 5 * 1024 * 1024) {
@@ -666,16 +693,26 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
   /* --- Baukasten einer Seite --- */
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 pb-32">
-      <button
-        type="button"
-        onClick={() => {
-          setSeite(null);
-          setBausteine([]);
-        }}
-        className="mb-4 text-[13.5px] font-medium text-taupe-600 transition hover:text-taupe-700"
-      >
-        &larr; Alle Seiten
-      </button>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setSeite(null);
+            setBausteine([]);
+          }}
+          className="text-[13.5px] font-medium text-taupe-600 transition hover:text-taupe-700"
+        >
+          &larr; Alle Seiten
+        </button>
+        <button
+          type="button"
+          onClick={seiteLoeschen}
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-greige-200 bg-white px-3 text-[12.5px] font-medium text-ink-mute transition hover:border-red-300 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+          {"Seite l\u00F6schen"}
+        </button>
+      </div>
 
       <div className="mb-5 rounded-xl border border-greige-200 bg-white p-4">
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
@@ -898,6 +935,7 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
 
 interface DateiInfo {
   id: string;
+  art: string;
   bereich: string;
   titel: string;
   dateiname: string;
@@ -964,12 +1002,16 @@ function DateiVerwaltung({
   const api = useApi(token, abmelden);
   const [dateien, setDateien] = useState<DateiInfo[]>([]);
   const [laedt, setLaedt] = useState(true);
+  const [art, setArt] = useState<"datei" | "youtube" | "link">("datei");
   const [bereich, setBereich] = useState("");
   const [titel, setTitel] = useState("");
   const [datei, setDatei] = useState<File | null>(null);
   const [vorschau, setVorschau] = useState<File | null>(null);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState("");
+  const [filter, setFilter] = useState("");
 
   const laden = useCallback(async () => {
     setLaedt(true);
@@ -988,57 +1030,103 @@ function DateiVerwaltung({
     laden();
   }, [laden]);
 
+  const zuruecksetzen = () => {
+    setTitel("");
+    setDatei(null);
+    setVorschau(null);
+    setYoutubeUrl("");
+    setLinkUrl("");
+  };
+
   const hochladen = async () => {
     setFehler("");
-    if (!datei) {
-      setFehler("Bitte zuerst eine Datei waehlen.");
-      return;
-    }
-    if (datei.size > 5 * 1024 * 1024) {
-      setFehler("Die Datei ist zu gross. Erlaubt sind hoechstens 5 MB.");
-      return;
-    }
-    setLaeuft(true);
+    const body: Record<string, unknown> = { art, bereich, titel: titel.trim() };
     try {
-      const base64 = await dateiZuBase64(datei);
-      let vorschauB64: string | undefined;
-      let vorschauTyp: string | undefined;
-      if (vorschau) {
-        vorschauB64 = await dateiZuBase64(vorschau);
-        vorschauTyp = vorschau.type;
-      } else if (istPdf(datei)) {
-        // Automatisch die erste PDF-Seite als Vorschaubild rendern
-        const auto = await pdfVorschauBase64(datei);
-        if (auto) {
-          vorschauB64 = auto;
-          vorschauTyp = "image/jpeg";
+      if (art === "datei") {
+        if (!datei) {
+          setFehler("Bitte zuerst eine Datei waehlen.");
+          return;
+        }
+        setLaeuft(true);
+        if (supabaseAktiv()) {
+          // Grosse Dateien direkt nach Supabase (kein Groessenlimit)
+          body.urlExtern = await supabaseUpload(
+            datei,
+            datei.name,
+            datei.type || "application/octet-stream"
+          );
+          body.dateiname = datei.name;
+          body.typ = datei.type;
+          body.groesse = datei.size;
+          if (vorschau) {
+            body.vorschauExtern = await supabaseUpload(
+              vorschau,
+              vorschau.name,
+              vorschau.type
+            );
+          } else if (istPdf(datei)) {
+            const b64 = await pdfVorschauBase64(datei);
+            if (b64) {
+              body.vorschauExtern = await supabaseUpload(
+                base64ZuBlob(b64, "image/jpeg"),
+                datei.name + "-vorschau.jpg",
+                "image/jpeg"
+              );
+            }
+          }
+        } else {
+          // Ohne Supabase: max. 5 MB ueber Netlify
+          if (datei.size > 5 * 1024 * 1024) {
+            setFehler(
+              "Datei zu gross (max. 5 MB ohne Supabase). Richte Supabase ein oder nutze YouTube/Link."
+            );
+            return;
+          }
+          body.datei = await dateiZuBase64(datei);
+          body.dateiname = datei.name;
+          body.typ = datei.type;
+          if (vorschau) {
+            body.vorschau = await dateiZuBase64(vorschau);
+            body.vorschauTyp = vorschau.type;
+          } else if (istPdf(datei)) {
+            const auto = await pdfVorschauBase64(datei);
+            if (auto) {
+              body.vorschau = auto;
+              body.vorschauTyp = "image/jpeg";
+            }
+          }
+        }
+      } else if (art === "youtube") {
+        if (!youtubeUrl.trim()) {
+          setFehler("Bitte einen YouTube-Link eingeben.");
+          return;
+        }
+        setLaeuft(true);
+        body.youtubeUrl = youtubeUrl.trim();
+      } else {
+        if (!linkUrl.trim()) {
+          setFehler("Bitte einen Link eingeben.");
+          return;
+        }
+        setLaeuft(true);
+        body.linkUrl = linkUrl.trim();
+        if (vorschau) {
+          body.vorschau = await dateiZuBase64(vorschau);
+          body.vorschauTyp = vorschau.type;
         }
       }
-      await api("dateien", {
-        method: "POST",
-        body: JSON.stringify({
-          bereich,
-          titel: titel.trim(),
-          datei: base64,
-          dateiname: datei.name,
-          typ: datei.type,
-          vorschau: vorschauB64,
-          vorschauTyp,
-        }),
-      });
-      setTitel("");
-      setDatei(null);
-      setVorschau(null);
+      await api("dateien", { method: "POST", body: JSON.stringify(body) });
+      zuruecksetzen();
       await laden();
     } catch (e) {
-      setFehler(e instanceof Error ? e.message : "Upload fehlgeschlagen.");
+      setFehler(e instanceof Error ? e.message : "Hat nicht geklappt.");
     } finally {
       setLaeuft(false);
     }
   };
 
   const loeschen = async (id: string) => {
-    if (!window.confirm("Diese Datei wirklich loeschen?")) return;
+    if (!window.confirm("Diesen Eintrag wirklich loeschen?")) return;
     setFehler("");
     try {
       await api("dateien?id=" + encodeURIComponent(id), { method: "DELETE" });
@@ -1047,6 +1135,24 @@ function DateiVerwaltung({
       setFehler(e instanceof Error ? e.message : "Loeschen fehlgeschlagen.");
     }
   };
+
+  const bereicheMitDateien = Array.from(new Set(dateien.map((d) => d.bereich)));
+  const gefiltert = filter ? dateien.filter((d) => d.bereich === filter) : dateien;
+
+  const artKnopf = (wert: "datei" | "youtube" | "link", label: string) => (
+    <button
+      type="button"
+      onClick={() => setArt(wert)}
+      className={
+        "flex h-9 flex-1 items-center justify-center rounded-md text-[13px] font-medium transition " +
+        (art === wert
+          ? "bg-taupe-500 text-offwhite"
+          : "text-ink-soft hover:bg-greige-100")
+      }
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-4">
@@ -1064,11 +1170,17 @@ function DateiVerwaltung({
 
       <div className="mb-5 rounded-xl border border-greige-200 bg-white p-4">
         <h2 className="mb-1 text-[16px] font-semibold text-ink">
-          Neue Datei hochladen
+          Neuer Eintrag
         </h2>
-        <p className="mb-4 text-[12.5px] text-ink-mute">
+        <p className="mb-3 text-[12.5px] text-ink-mute">
           {"Erscheint direkt in der gew\u00E4hlten Kategorie \u2013 mit Vorschau."}
         </p>
+
+        <div className="mb-3 flex gap-1 rounded-lg border border-greige-200 bg-offwhite p-1">
+          {artKnopf("datei", "Datei")}
+          {artKnopf("youtube", "YouTube")}
+          {artKnopf("link", "Link")}
+        </div>
 
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
           Kategorie
@@ -1097,36 +1209,84 @@ function DateiVerwaltung({
           className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
         />
 
-        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
-          Datei (PDF, Bild u. a., max. 5 MB)
-        </label>
-        <label className="mb-3 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
-          <Upload className="h-5 w-5 shrink-0 text-taupe-600" />
-          <span className="min-w-0 flex-1 truncate">
-            {datei ? datei.name : "Datei ausw\u00E4hlen"}
-          </span>
-          <input
-            type="file"
-            className="hidden"
-            onChange={(e) => setDatei(e.target.files?.[0] || null)}
-          />
-        </label>
+        {art === "datei" ? (
+          <>
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              {supabaseAktiv()
+                ? "Datei (PDF, Bild, Video u. a. \u2013 auch gro\u00DF)"
+                : "Datei (PDF, Bild u. a., max. 5 MB)"}
+            </label>
+            <label className="mb-3 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
+              <Upload className="h-5 w-5 shrink-0 text-taupe-600" />
+              <span className="min-w-0 flex-1 truncate">
+                {datei ? datei.name : "Datei ausw\u00E4hlen"}
+              </span>
+              <input
+                type="file"
+                className="hidden"
+                onChange={(e) => setDatei(e.target.files?.[0] || null)}
+              />
+            </label>
 
-        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
-          {"Vorschaubild (optional \u2013 bei PDFs automatisch aus Seite 1)"}
-        </label>
-        <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
-          <ImageIcon className="h-5 w-5 shrink-0 text-taupe-600" />
-          <span className="min-w-0 flex-1 truncate">
-            {vorschau ? vorschau.name : "Bild ausw\u00E4hlen"}
-          </span>
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setVorschau(e.target.files?.[0] || null)}
-          />
-        </label>
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              {"Vorschaubild (optional \u2013 bei PDFs automatisch aus Seite 1)"}
+            </label>
+            <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
+              <ImageIcon className="h-5 w-5 shrink-0 text-taupe-600" />
+              <span className="min-w-0 flex-1 truncate">
+                {vorschau ? vorschau.name : "Bild ausw\u00E4hlen"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setVorschau(e.target.files?.[0] || null)}
+              />
+            </label>
+          </>
+        ) : art === "youtube" ? (
+          <>
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              YouTube-Link
+            </label>
+            <input
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              placeholder="https://www.youtube.com/watch?v=..."
+              className="mb-4 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+            />
+            <p className="mb-4 -mt-2 text-[12px] text-ink-mute">
+              {"Vorschaubild kommt automatisch von YouTube. Ideal f\u00FCr gro\u00DFe Videos."}
+            </p>
+          </>
+        ) : (
+          <>
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              Link (z. B. gro\u00DFes PDF, Webseite)
+            </label>
+            <input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://..."
+              className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+            />
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              Vorschaubild (optional)
+            </label>
+            <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
+              <ImageIcon className="h-5 w-5 shrink-0 text-taupe-600" />
+              <span className="min-w-0 flex-1 truncate">
+                {vorschau ? vorschau.name : "Bild ausw\u00E4hlen"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => setVorschau(e.target.files?.[0] || null)}
+              />
+            </label>
+          </>
+        )}
 
         {fehler ? (
           <p className="mb-3 rounded-md border border-greige-200 bg-offwhite px-3 py-2 text-[13px] text-ink-soft">
@@ -1137,33 +1297,48 @@ function DateiVerwaltung({
         <button
           type="button"
           onClick={hochladen}
-          disabled={laeuft || !datei}
+          disabled={laeuft}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600 disabled:opacity-50"
         >
           {laeuft ? (
             <Loader2 className="h-[18px] w-[18px] animate-spin" />
           ) : (
-            <Upload className="h-[18px] w-[18px]" />
+            <Plus className="h-[18px] w-[18px]" />
           )}
-          Hochladen
+          {art === "datei" ? "Hochladen" : "Hinzuf\u00FCgen"}
         </button>
       </div>
 
-      <h2 className="mb-3 text-[15px] font-semibold text-ink">
-        Hochgeladene Dateien
-      </h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-ink">Eintr\u00E4ge</h2>
+        {bereicheMitDateien.length > 1 ? (
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="h-9 max-w-[55%] rounded-md border border-greige-200 bg-white px-2 text-[13px] text-ink-soft outline-none"
+          >
+            <option value="">Alle Kategorien</option>
+            {bereicheMitDateien.map((b) => (
+              <option key={b} value={b}>
+                {getCategory(b)?.title || "Ohne Kategorie"}
+              </option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+
       {laedt ? (
         <div className="flex items-center justify-center gap-2 py-8 text-ink-mute">
           <Loader2 className="h-5 w-5 animate-spin" />
           Wird geladen ...
         </div>
-      ) : dateien.length === 0 ? (
+      ) : gefiltert.length === 0 ? (
         <div className="rounded-xl border border-dashed border-greige-300 px-6 py-10 text-center text-[13.5px] text-ink-mute">
-          Noch keine Dateien hochgeladen.
+          Noch keine Eintr\u00E4ge.
         </div>
       ) : (
         <div className="space-y-2.5">
-          {dateien.map((d) => (
+          {gefiltert.map((d) => (
             <div
               key={d.id}
               className="flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3"
@@ -1172,17 +1347,24 @@ function DateiVerwaltung({
                 href={d.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-greige-100 text-taupe-600"
+                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-greige-100 text-taupe-600"
               >
                 {d.vorschauUrl ? (
-                  <img
-                    src={d.vorschauUrl}
-                    alt=""
-                    className="h-full w-full object-cover"
-                  />
+                  <img src={d.vorschauUrl} alt="" className="h-full w-full object-cover" />
+                ) : d.art === "youtube" ? (
+                  <Video className="h-5 w-5" />
+                ) : d.art === "link" ? (
+                  <ExternalLink className="h-5 w-5" />
                 ) : (
                   <FileText className="h-5 w-5" />
                 )}
+                {d.art === "youtube" ? (
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
+                      <Video className="h-3.5 w-3.5" />
+                    </span>
+                  </span>
+                ) : null}
               </a>
               <div className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-semibold text-ink">
@@ -1191,13 +1373,17 @@ function DateiVerwaltung({
                 <span className="block truncate text-[12px] text-ink-mute">
                   {getCategory(d.bereich)?.title || "Ohne Kategorie"}
                   {" \u00B7 "}
-                  {groesseText(d.groesse)}
+                  {d.art === "youtube"
+                    ? "YouTube"
+                    : d.art === "link"
+                    ? "Link"
+                    : groesseText(d.groesse)}
                 </span>
               </div>
               <button
                 type="button"
                 onClick={() => loeschen(d.id)}
-                aria-label="Datei loeschen"
+                aria-label="Eintrag loeschen"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
               >
                 <Trash2 className="h-4 w-4" />

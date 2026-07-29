@@ -5,21 +5,24 @@
 import { getStore } from "@netlify/blobs";
 
 function dateiAusgabe(r) {
-  const istBild = String(r.typ || "").startsWith("image/");
+  const art = r.art || "datei";
+  const istBild = art === "datei" && String(r.typ || "").startsWith("image/");
+  const url = r.urlExtern ? r.urlExtern : r.medienKey ? "/api/medien/" + r.medienKey : "";
+  let vorschauUrl = "";
+  if (r.vorschauKey) vorschauUrl = "/api/medien/" + r.vorschauKey;
+  else if (r.vorschauExtern) vorschauUrl = r.vorschauExtern;
+  else if (istBild) vorschauUrl = "/api/medien/" + r.medienKey;
   return {
     id: r.id,
+    art,
     bereich: r.bereich || "",
-    titel: r.titel || r.dateiname,
-    dateiname: r.dateiname,
-    typ: r.typ,
+    titel: r.titel || r.dateiname || "",
+    dateiname: r.dateiname || "",
+    typ: r.typ || art,
     groesse: r.groesse || 0,
     erstellt: r.erstellt || 0,
-    url: "/api/medien/" + r.medienKey,
-    vorschauUrl: r.vorschauKey
-      ? "/api/medien/" + r.vorschauKey
-      : istBild
-      ? "/api/medien/" + r.medienKey
-      : "",
+    url,
+    vorschauUrl,
     istBild,
   };
 }

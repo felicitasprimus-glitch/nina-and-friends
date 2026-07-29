@@ -22,23 +22,43 @@ function dateienStore() {
 
 // Datei-Datensatz in die Form fuer App/Admin bringen
 function dateiAusgabe(r) {
-  const istBild = String(r.typ || "").startsWith("image/");
+  const art = r.art || "datei";
+  const istBild = art === "datei" && String(r.typ || "").startsWith("image/");
+  const url = r.urlExtern ? r.urlExtern : r.medienKey ? "/api/medien/" + r.medienKey : "";
+  let vorschauUrl = "";
+  if (r.vorschauKey) vorschauUrl = "/api/medien/" + r.vorschauKey;
+  else if (r.vorschauExtern) vorschauUrl = r.vorschauExtern;
+  else if (istBild) vorschauUrl = "/api/medien/" + r.medienKey;
   return {
     id: r.id,
+    art,
     bereich: r.bereich || "",
-    titel: r.titel || r.dateiname,
-    dateiname: r.dateiname,
-    typ: r.typ,
+    titel: r.titel || r.dateiname || "",
+    dateiname: r.dateiname || "",
+    typ: r.typ || art,
     groesse: r.groesse || 0,
     erstellt: r.erstellt || 0,
-    url: "/api/medien/" + r.medienKey,
-    vorschauUrl: r.vorschauKey
-      ? "/api/medien/" + r.vorschauKey
-      : istBild
-      ? "/api/medien/" + r.medienKey
-      : "",
+    url,
+    vorschauUrl,
     istBild,
   };
+}
+
+// YouTube-Video-ID aus verschiedenen Link-Formaten holen
+function youtubeId(link) {
+  const s = String(link || "");
+  const muster = [
+    /[?&]v=([a-zA-Z0-9_-]{11})/,
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+  ];
+  for (const m of muster) {
+    const t = s.match(m);
+    if (t) return t[1];
+  }
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s.trim())) return s.trim();
+  return "";
 }
 
 /* ---------- Anmeldung (HMAC-signierte Sitzung) ---------- */
@@ -274,46 +294,86 @@ export default async function handler(request) {
       return json({ dateien: alle.map(dateiAusgabe) });
     }
 
-    // --- Datei hochladen (in eine Kategorie) ---
+    // --- Eintrag anlegen (Datei-Upload, YouTube oder Link) ---
     if (aktion === "dateien" && request.method === "POST") {
       const body = await request.json();
-      if (!body.datei || !body.dateiname) {
-        return json({ error: "datei und dateiname noetig" }, 400);
-      }
-      const bytes = Buffer.from(body.datei, "base64");
-      if (bytes.length > 5 * 1024 * 1024) {
-        return json({ error: "Die Datei ist zu gross. Erlaubt sind hoechstens 5 MB." }, 413);
-      }
+      const art = body.art || "datei";
       const id = crypto.randomUUID();
-      const typ = body.typ || "application/octet-stream";
+      const rec = {
+        id,
+        art,
+        bereich: body.bereich || "",
+        titel: (body.titel || "").trim(),
+        erstellt: Date.now(),
+        medienKey: "",
+        vorschauKey: "",
+        urlExtern: "",
+        vorschauExtern: "",
+        dateiname: "",
+        typ: art,
+        groesse: 0,
+      };
       const ms = medienStore();
-      const medienKey = "d_" + id;
-      await ms.set(medienKey, bytes, {
-        metadata: { contentType: typ, filename: body.dateiname },
-      });
 
-      let vorschauKey = "";
-      if (body.vorschau) {
+      // optionales Vorschaubild (fuer Datei und Link)
+      const vorschauSpeichern = async () => {
+        if (!body.vorschau) return;
         const vbytes = Buffer.from(body.vorschau, "base64");
         if (vbytes.length <= 5 * 1024 * 1024) {
-          vorschauKey = "dv_" + id;
-          await ms.set(vorschauKey, vbytes, {
+          rec.vorschauKey = "dv_" + id;
+          await ms.set(rec.vorschauKey, vbytes, {
             metadata: { contentType: body.vorschauTyp || "image/jpeg", filename: "vorschau" },
           });
         }
+      };
+
+      if (art === "youtube") {
+        const vid = youtubeId(body.youtubeUrl || "");
+        if (!vid) return json({ error: "Kein gueltiger YouTube-Link." }, 400);
+        rec.urlExtern = "https://www.youtube.com/watch?v=" + vid;
+        rec.vorschauExtern = "https://img.youtube.com/vi/" + vid + "/hqdefault.jpg";
+        rec.titel = rec.titel || "YouTube-Video";
+        rec.typ = "youtube";
+      } else if (art === "link") {
+        if (!body.linkUrl) return json({ error: "Bitte einen Link angeben." }, 400);
+        rec.urlExtern = body.linkUrl;
+        rec.titel = rec.titel || body.linkUrl;
+        rec.typ = "link";
+        await vorschauSpeichern();
+      } else {
+        // art === "datei"
+        if (body.urlExtern) {
+          // Datei liegt extern (z. B. Supabase) - nur Metadaten speichern
+          rec.urlExtern = body.urlExtern;
+          rec.dateiname = body.dateiname || "";
+          rec.typ = body.typ || "application/octet-stream";
+          rec.groesse = Number(body.groesse) || 0;
+          rec.titel = rec.titel || rec.dateiname;
+          if (body.vorschauExtern) rec.vorschauExtern = body.vorschauExtern;
+          else await vorschauSpeichern();
+        } else {
+          if (!body.datei || !body.dateiname) {
+            return json({ error: "datei und dateiname noetig" }, 400);
+          }
+          const bytes = Buffer.from(body.datei, "base64");
+          if (bytes.length > 5 * 1024 * 1024) {
+            return json(
+              { error: "Die Datei ist zu gross. Fuer Grosses bitte Supabase, YouTube oder Externer Link nutzen." },
+              413
+            );
+          }
+          rec.medienKey = "d_" + id;
+          rec.dateiname = body.dateiname;
+          rec.typ = body.typ || "application/octet-stream";
+          rec.groesse = bytes.length;
+          rec.titel = rec.titel || body.dateiname;
+          await ms.set(rec.medienKey, bytes, {
+            metadata: { contentType: rec.typ, filename: body.dateiname },
+          });
+          await vorschauSpeichern();
+        }
       }
 
-      const rec = {
-        id,
-        bereich: body.bereich || "",
-        titel: body.titel || body.dateiname,
-        dateiname: body.dateiname,
-        typ,
-        groesse: bytes.length,
-        erstellt: Date.now(),
-        medienKey,
-        vorschauKey,
-      };
       await dateienStore().setJSON(id, rec);
       return json({ datei: dateiAusgabe(rec) });
     }
@@ -327,10 +387,12 @@ export default async function handler(request) {
       await ds.delete(id);
       if (rec) {
         const ms = medienStore();
-        try {
-          await ms.delete(rec.medienKey);
-        } catch {
-          // egal
+        if (rec.medienKey) {
+          try {
+            await ms.delete(rec.medienKey);
+          } catch {
+            // egal
+          }
         }
         if (rec.vorschauKey) {
           try {

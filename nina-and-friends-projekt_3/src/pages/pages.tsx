@@ -9,6 +9,7 @@ import {
   Heart,
   ImageIcon,
   LogIn,
+  Play,
   Settings,
   User,
 } from "lucide-react";
@@ -156,7 +157,7 @@ export function CategoryPage() {
                     rel="noopener noreferrer"
                     className="group overflow-hidden rounded-xl border border-greige-200 bg-white transition hover:border-taupe-300"
                   >
-                    <div className="aspect-[4/3] w-full overflow-hidden bg-greige-100">
+                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-greige-100">
                       {d.vorschauUrl ? (
                         <img
                           src={d.vorschauUrl}
@@ -164,19 +165,48 @@ export function CategoryPage() {
                           loading="lazy"
                           className="h-full w-full object-cover transition group-hover:scale-[1.03]"
                         />
+                      ) : d.art === "youtube" ? (
+                        <span className="flex h-full w-full items-center justify-center text-taupe-500">
+                          <Play className="h-8 w-8" />
+                        </span>
+                      ) : d.art === "link" ? (
+                        <span className="flex h-full w-full items-center justify-center text-taupe-500">
+                          <ExternalLink className="h-8 w-8" />
+                        </span>
                       ) : (
                         <span className="flex h-full w-full items-center justify-center text-taupe-500">
                           <FileText className="h-8 w-8" />
                         </span>
                       )}
+                      {d.art === "youtube" ? (
+                        <span className="absolute inset-0 flex items-center justify-center">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white">
+                            <Play className="h-5 w-5" />
+                          </span>
+                        </span>
+                      ) : null}
                     </div>
                     <div className="p-3">
                       <span className="block truncate text-[13.5px] font-semibold text-ink">
                         {d.titel}
                       </span>
                       <span className="mt-0.5 flex items-center gap-1 text-[11.5px] text-ink-mute">
-                        <Download className="h-3.5 w-3.5" />
-                        {(d.istBild ? "Bild" : "Datei") + " \u00F6ffnen"}
+                        {d.art === "youtube" ? (
+                          <>
+                            <Play className="h-3.5 w-3.5" />
+                            Video ansehen
+                          </>
+                        ) : d.art === "link" ? (
+                          <>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            {"\u00D6ffnen"}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-3.5 w-3.5" />
+                            {(d.istBild ? "Bild" : "Datei") + " \u00F6ffnen"}
+                          </>
+                        )}
                       </span>
                     </div>
                   </a>
