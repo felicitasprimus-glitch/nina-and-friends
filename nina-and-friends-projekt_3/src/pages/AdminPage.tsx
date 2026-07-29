@@ -22,6 +22,7 @@ import {
   Video,
 } from "lucide-react";
 import { alleKategorien, getCategory } from "../data/content";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 /* ---------- Typen ---------- */
 
@@ -898,6 +899,38 @@ function dateiZuBase64(datei: File): Promise<string> {
   });
 }
 
+// Erste Seite eines PDFs zu einem JPEG-Vorschaubild rendern (im Browser).
+// Gibt Base64 zurueck oder null, wenn es nicht klappt.
+async function pdfVorschauBase64(datei: File): Promise<string | null> {
+  try {
+    const pdfjs = await import("pdfjs-dist");
+    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    const puffer = await datei.arrayBuffer();
+    const doc = await pdfjs.getDocument({ data: puffer }).promise;
+    const seite = await doc.getPage(1);
+    const basis = seite.getViewport({ scale: 1 });
+    const skala = Math.min(2, 900 / basis.width);
+    const viewport = seite.getViewport({ scale: skala });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(viewport.width);
+    canvas.height = Math.round(viewport.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    await seite.render({ canvas, canvasContext: ctx, viewport }).promise;
+    const daten = canvas.toDataURL("image/jpeg", 0.82);
+    return daten.split(",")[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+function istPdf(datei: File): boolean {
+  return (
+    datei.type === "application/pdf" ||
+    datei.name.toLowerCase().endsWith(".pdf")
+  );
+}
+
 function groesseText(bytes: number): string {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
   return Math.max(1, Math.round(bytes / 1024)) + " KB";
@@ -955,6 +988,13 @@ function DateiVerwaltung({
       if (vorschau) {
         vorschauB64 = await dateiZuBase64(vorschau);
         vorschauTyp = vorschau.type;
+      } else if (istPdf(datei)) {
+        // Automatisch die erste PDF-Seite als Vorschaubild rendern
+        const auto = await pdfVorschauBase64(datei);
+        if (auto) {
+          vorschauB64 = auto;
+          vorschauTyp = "image/jpeg";
+        }
       }
       await api("dateien", {
         method: "POST",
@@ -1055,7 +1095,7 @@ function DateiVerwaltung({
         </label>
 
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
-          {"Vorschaubild (optional \u2013 f\u00FCr PDFs sch\u00F6n)"}
+          {"Vorschaubild (optional \u2013 bei PDFs automatisch aus Seite 1)"}
         </label>
         <label className="mb-4 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
           <ImageIcon className="h-5 w-5 shrink-0 text-taupe-600" />
