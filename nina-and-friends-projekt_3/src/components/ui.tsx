@@ -28,6 +28,7 @@ import {
   Mic,
   Newspaper,
   PlayCircle,
+  MessageCircle,
   Search,
   Send,
   Share2,
@@ -521,6 +522,96 @@ export function QuickTile({
 
 /* ---------- Content card ---------- */
 
+export function KundenTeilen({
+  url,
+  title,
+  text,
+}: {
+  url: string;
+  title: string;
+  text: string;
+}) {
+  const [offen, setOffen] = useState(false);
+  const [kopiert, setKopiert] = useState(false);
+  const nachricht = (text ? text + "\n" : "") + url;
+
+  const perWhatsApp = () => {
+    window.open(
+      "https://wa.me/?text=" + encodeURIComponent(nachricht),
+      "_blank",
+      "noopener"
+    );
+  };
+  const perSystem = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+      } catch {
+        // abgebrochen
+      }
+    } else {
+      perWhatsApp();
+    }
+  };
+  const kopieren = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setKopiert(true);
+      window.setTimeout(() => setKopiert(false), 2000);
+    } catch {
+      // egal
+    }
+  };
+
+  if (!offen) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOffen(true)}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600"
+      >
+        <Share2 className="h-[18px] w-[18px]" />
+        {"An Kundin teilen"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={perWhatsApp}
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#25D366] text-[15px] font-semibold text-white transition hover:brightness-95"
+      >
+        <MessageCircle className="h-[18px] w-[18px]" />
+        {"Per WhatsApp senden"}
+      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={perSystem}
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-greige-200 bg-white text-[14px] font-medium text-ink-soft transition hover:bg-greige-100"
+        >
+          <Share2 className="h-4 w-4" />
+          {"Anders teilen"}
+        </button>
+        <button
+          type="button"
+          onClick={kopieren}
+          className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-greige-200 bg-white text-[14px] font-medium text-ink-soft transition hover:bg-greige-100"
+        >
+          {kopiert ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <ClipboardCopy className="h-4 w-4" />
+          )}
+          {kopiert ? "Kopiert" : "Link kopieren"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ContentCard({ item }: { item: ContentItem }) {
   const cat = getCategory(item.categorySlug);
   return (
@@ -727,13 +818,11 @@ export function ShareButton({ title, text }: { title: string; text: string }) {
 // So landet die Kundin beim Rezept/Video und nicht in der internen Team-App.
 
 export function CustomerShareButton({
-  title,
   url,
   text,
   label,
-  variant = "solid",
 }: {
-  title: string;
+  title?: string;
   url: string;
   text?: string;
   label?: string;
@@ -741,40 +830,42 @@ export function CustomerShareButton({
 }) {
   const [done, setDone] = useState(false);
   const nachricht = text ? text + "\n\n" + url : url;
+  const waLink = "https://wa.me/?text=" + encodeURIComponent(nachricht);
 
-  const teilen = async () => {
+  const kopieren = async () => {
     try {
-      if (navigator.share) {
-        await navigator.share({ title, text: text || title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(nachricht);
+      await navigator.clipboard.writeText(url);
       setDone(true);
       window.setTimeout(() => setDone(false), 2000);
     } catch {
-      // Abbruch durch Nutzerin - kein Fehler
+      // Abbruch - kein Fehler
     }
   };
 
-  const stil =
-    variant === "outline"
-      ? "border border-taupe-400 bg-white text-ink hover:bg-greige-100"
-      : "bg-taupe-500 text-offwhite shadow-soft hover:bg-taupe-600";
-
   return (
-    <button
-      type="button"
-      onClick={teilen}
-      className={
-        "flex h-12 w-full items-center justify-center gap-2 rounded-lg text-[14px] font-medium transition active:scale-[0.98] " +
-        stil
-      }
-    >
-      {done ? <Check className="h-[18px] w-[18px]" /> : <Send className="h-[18px] w-[18px]" />}
-      {done
-        ? "Kopiert \u2013 einf\u00FCgen und senden"
-        : label || "An Kundin weiterleiten"}
-    </button>
+    <div className="space-y-2">
+      <a
+        href={waLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] text-[15px] font-semibold text-white shadow-soft transition hover:brightness-95 active:scale-[0.98]"
+      >
+        <MessageCircle className="h-[18px] w-[18px]" />
+        {label || "Per WhatsApp an Kundin senden"}
+      </a>
+      <button
+        type="button"
+        onClick={kopieren}
+        className="flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-greige-200 bg-white text-[13.5px] font-medium text-ink-soft transition hover:bg-greige-100"
+      >
+        {done ? (
+          <Check className="h-4 w-4" />
+        ) : (
+          <ClipboardCopy className="h-4 w-4" />
+        )}
+        {done ? "Link kopiert" : "Link kopieren"}
+      </button>
+    </div>
   );
 }
 

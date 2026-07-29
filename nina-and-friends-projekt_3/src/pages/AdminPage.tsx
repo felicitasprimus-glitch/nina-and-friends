@@ -13,6 +13,7 @@ import {
   Loader2,
   Lock,
   LogOut,
+  MessageCircle,
   Minus,
   MousePointerClick,
   Plus,
@@ -789,6 +790,23 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
           >
             {kopiert ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {kopiert ? "Kopiert" : "Link kopieren"}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              window.open(
+                "https://wa.me/?text=" +
+                  encodeURIComponent(
+                    (untertitel ? untertitel + "\n" : "") + adresse
+                  ),
+                "_blank",
+                "noopener"
+              )
+            }
+            className="flex h-10 items-center gap-1.5 rounded-lg bg-[#25D366] px-3 text-[13px] font-semibold text-white transition hover:brightness-95"
+          >
+            <MessageCircle className="h-4 w-4" />
+            An Kundin (WhatsApp)
           </button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { Download, ExternalLink } from "lucide-react";
 import {
   BackButton,
   CardSkeleton,
-  CustomerShareButton,
+  KundenTeilen,
   EmptyState,
 } from "../components/ui";
 
@@ -270,11 +270,10 @@ export default function SeitePage() {
           <p className="text-[12.5px] leading-snug text-ink-mute">
             Deine Kundin bekommt nur diese Seite \u2013 nicht die interne Team-App.
           </p>
-          <CustomerShareButton
+          <KundenTeilen
             title={kopf.titel}
             url={oeffentlich}
             text={kopf.untertitel || kopf.titel}
-            label="An Kundin senden"
           />
         </div>
       ) : null}
