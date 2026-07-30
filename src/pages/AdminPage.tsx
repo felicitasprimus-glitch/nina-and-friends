@@ -491,10 +491,10 @@ function BausteinKarte({
 /* ---------- Baukasten ---------- */
 
 const DESIGNS = [
-  { id: "creme", name: "K\u00FCche & Creme", bg: "#FBF9F5", akzent: "#948A7C", serif: true },
-  { id: "klar", name: "Klar & Modern", bg: "#FFFFFF", akzent: "#3C7A5A", serif: false },
-  { id: "fest", name: "Fest & Gold", bg: "#FBF7F1", akzent: "#7A2E3A", serif: true },
-  { id: "blush", name: "Warm & Verspielt", bg: "#F6F1EC", akzent: "#8B5E73", serif: true },
+  { id: "creme", name: "K\u00FCche & Creme", bg: "#FBF9F5", ink: "#2E2B26", muted: "#5C564E", akzent: "#948A7C", akzentInk: "#F8F6F2", radius: 12, font: "'Cormorant Garamond',Georgia,serif" },
+  { id: "klar", name: "Klar & Modern", bg: "#FFFFFF", ink: "#1B1B1A", muted: "#55524C", akzent: "#3C7A5A", akzentInk: "#FFFFFF", radius: 8, font: "'Outfit',system-ui,sans-serif" },
+  { id: "fest", name: "Fest & Gold", bg: "#FBF7F1", ink: "#34252A", muted: "#6E5A5E", akzent: "#7A2E3A", akzentInk: "#FBF7F1", radius: 4, font: "'Playfair Display',Georgia,serif" },
+  { id: "blush", name: "Warm & Verspielt", bg: "#F6F1EC", ink: "#3D3229", muted: "#6B5B4E", akzent: "#8B5E73", akzentInk: "#FBF7F4", radius: 18, font: "'Fraunces',Georgia,serif" },
 ];
 
 const VORLAGEN_KATEGORIEN = [
@@ -1021,44 +1021,73 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
           Design-Vorlage
         </label>
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          {DESIGNS.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => setDesign(d.id)}
-              className={
-                "flex items-center gap-2.5 rounded-lg border p-2.5 text-left transition " +
-                (design === d.id
-                  ? "border-taupe-500 ring-1 ring-taupe-400"
-                  : "border-greige-200 hover:bg-greige-100")
-              }
-            >
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-greige-200"
-                style={{ background: d.bg }}
+        <div className="mb-3 grid grid-cols-2 gap-2.5">
+          {DESIGNS.map((d) => {
+            const aktiv = design === d.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setDesign(d.id)}
+                className={
+                  "overflow-hidden rounded-xl border text-left transition " +
+                  (aktiv
+                    ? "border-taupe-500 ring-2 ring-taupe-400"
+                    : "border-greige-200 hover:border-taupe-300")
+                }
               >
-                <span
-                  className="text-[15px] leading-none"
-                  style={{
-                    color: d.akzent,
-                    fontFamily: d.serif ? "Georgia, serif" : "system-ui, sans-serif",
-                    fontWeight: 600,
-                  }}
+                <div
+                  className="px-3 pb-3.5 pt-4"
+                  style={{ background: d.bg, fontFamily: d.font }}
                 >
-                  Aa
-                </span>
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-medium text-ink">
-                  {d.name}
-                </span>
-                {design === d.id ? (
-                  <span className="block text-[11px] text-taupe-600">{"Ausgew\u00E4hlt"}</span>
-                ) : null}
-              </span>
-            </button>
-          ))}
+                  <span
+                    className="mx-auto mb-2 block h-9 w-9 rounded-full"
+                    style={{ background: d.akzent, opacity: 0.9 }}
+                  />
+                  <div
+                    className="text-center leading-tight"
+                    style={{ color: d.ink, fontWeight: 600, fontSize: 14 }}
+                  >
+                    Dein Titel
+                  </div>
+                  <div
+                    className="mb-2.5 text-center"
+                    style={{ color: d.muted, fontSize: 9 }}
+                  >
+                    Kurzer Untertitel
+                  </div>
+                  <span
+                    className="mx-auto flex h-[18px] w-[85%] items-center justify-center"
+                    style={{
+                      background: d.akzent,
+                      color: d.akzentInk,
+                      borderRadius: d.radius,
+                      fontSize: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Knopf
+                  </span>
+                  <span
+                    className="mx-auto mt-1.5 block h-[18px] w-[85%]"
+                    style={{
+                      background: d.akzent,
+                      opacity: 0.75,
+                      borderRadius: d.radius,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-1 px-2.5 py-2">
+                  <span className="truncate text-[12px] font-medium text-ink">
+                    {d.name}
+                  </span>
+                  {aktiv ? (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-taupe-600" />
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
