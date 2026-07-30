@@ -23,7 +23,7 @@ import {
   Video,
 } from "lucide-react";
 import { alleKategorien, getCategory } from "../data/content";
-import { supabaseAktiv, supabaseUpload, base64ZuBlob } from "../lib/supabase";
+import { supabaseAktiv, supabaseUploadSigniert, base64ZuBlob } from "../lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 /* ---------- Typen ---------- */
@@ -1049,30 +1049,41 @@ function DateiVerwaltung({
         }
         setLaeuft(true);
         if (supabaseAktiv()) {
-          // Grosse Dateien direkt nach Supabase (kein Groessenlimit)
-          body.urlExtern = await supabaseUpload(
+          // Grosse Dateien: signierte URL vom Server holen (umgeht RLS)
+          const sig = await api("signed-upload", {
+            method: "POST",
+            body: JSON.stringify({ dateiname: datei.name }),
+          });
+          await supabaseUploadSigniert(
+            sig.pfad,
+            sig.token,
             datei,
-            datei.name,
             datei.type || "application/octet-stream"
           );
+          body.urlExtern = sig.publicUrl;
           body.dateiname = datei.name;
           body.typ = datei.type;
           body.groesse = datei.size;
+
+          // Vorschau (manuell, oder automatisch aus PDF-Seite 1)
+          let vorschauBlob: Blob | null = null;
+          let vTyp = "image/jpeg";
+          let vName = datei.name + "-vorschau.jpg";
           if (vorschau) {
-            body.vorschauExtern = await supabaseUpload(
-              vorschau,
-              vorschau.name,
-              vorschau.type
-            );
+            vorschauBlob = vorschau;
+            vTyp = vorschau.type;
+            vName = vorschau.name;
           } else if (istPdf(datei)) {
             const b64 = await pdfVorschauBase64(datei);
-            if (b64) {
-              body.vorschauExtern = await supabaseUpload(
-                base64ZuBlob(b64, "image/jpeg"),
-                datei.name + "-vorschau.jpg",
-                "image/jpeg"
-              );
-            }
+            if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
+          }
+          if (vorschauBlob) {
+            const sigV = await api("signed-upload", {
+              method: "POST",
+              body: JSON.stringify({ dateiname: vName }),
+            });
+            await supabaseUploadSigniert(sigV.pfad, sigV.token, vorschauBlob, vTyp);
+            body.vorschauExtern = sigV.publicUrl;
           }
         } else {
           // Ohne Supabase: max. 5 MB ueber Netlify
@@ -1310,7 +1321,7 @@ function DateiVerwaltung({
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-ink">Eintr\u00E4ge</h2>
+        <h2 className="text-[15px] font-semibold text-ink">{"Eintr\u00E4ge"}</h2>
         {bereicheMitDateien.length > 1 ? (
           <select
             value={filter}
@@ -1334,7 +1345,7 @@ function DateiVerwaltung({
         </div>
       ) : gefiltert.length === 0 ? (
         <div className="rounded-xl border border-dashed border-greige-300 px-6 py-10 text-center text-[13.5px] text-ink-mute">
-          Noch keine Eintr\u00E4ge.
+          {"Noch keine Eintr\u00E4ge."}
         </div>
       ) : (
         <div className="space-y-2.5">

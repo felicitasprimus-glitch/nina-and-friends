@@ -283,6 +283,52 @@ export default async function handler(request) {
       return json({ ok: true });
     }
 
+    // --- Signierte Upload-URL fuer Supabase erzeugen (umgeht RLS) ---
+    if (aktion === "signed-upload" && request.method === "POST") {
+      const SUPA_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      const SERVICE = process.env.SUPABASE_SERVICE_KEY;
+      if (!SUPA_URL || !SERVICE) {
+        return json(
+          { error: "Supabase Server-Schluessel fehlt (SUPABASE_SERVICE_KEY in Netlify setzen)." },
+          503
+        );
+      }
+      const body = await request.json();
+      const name = String(body.dateiname || "datei")
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      const bucket = "dateien";
+      const pfad =
+        "uploads/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "-" + name;
+
+      const res = await fetch(
+        SUPA_URL + "/storage/v1/object/upload/sign/" + bucket + "/" + pfad,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + SERVICE,
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        }
+      );
+      if (!res.ok) {
+        const t = await res.text();
+        return json({ error: "Supabase " + res.status + ": " + t.slice(0, 200) }, 502);
+      }
+      const data = await res.json();
+      let token = "";
+      try {
+        token = new URL("http://x" + data.url).searchParams.get("token") || "";
+      } catch {
+        token = "";
+      }
+      const publicUrl =
+        SUPA_URL + "/storage/v1/object/public/" + bucket + "/" + pfad;
+      return json({ pfad, token, publicUrl });
+    }
+
     // --- Dateien pro Kategorie: auflisten ---
     if (aktion === "dateien" && request.method === "GET") {
       const ds = dateienStore();

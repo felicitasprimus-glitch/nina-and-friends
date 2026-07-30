@@ -41,11 +41,25 @@ export async function supabaseUpload(
     "uploads/" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + "-" + sicherer(dateiname);
   const { error } = await sb.storage.from(BUCKET).upload(pfad, daten, {
     contentType,
-    upsert: true,
+    upsert: false,
   });
   if (error) throw new Error(error.message);
   const { data } = sb.storage.from(BUCKET).getPublicUrl(pfad);
   return data.publicUrl;
+}
+
+// Datei ueber eine signierte URL hochladen (umgeht RLS komplett).
+export async function supabaseUploadSigniert(
+  pfad: string,
+  token: string,
+  daten: Blob,
+  contentType: string
+): Promise<void> {
+  const sb = holeClient();
+  const { error } = await sb.storage
+    .from(BUCKET)
+    .uploadToSignedUrl(pfad, token, daten, { contentType });
+  if (error) throw new Error(error.message);
 }
 
 // Base64 (ohne Praefix) zu einem Blob machen
