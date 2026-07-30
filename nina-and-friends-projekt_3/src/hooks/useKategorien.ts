@@ -13,9 +13,11 @@ interface EigeneKategorie {
 }
 
 let zwischenspeicher: Category[] | null = null;
+let verstecktCache: string[] = [];
 
 export function useKategorien() {
   const [eigene, setEigene] = useState<Category[]>(zwischenspeicher || []);
+  const [versteckt, setVersteckt] = useState<string[]>(verstecktCache);
 
   useEffect(() => {
     let aktiv = true;
@@ -34,7 +36,9 @@ export function useKategorien() {
             })
           );
           zwischenspeicher = liste;
+          verstecktCache = d.versteckt || [];
           setEigene(liste);
+          setVersteckt(d.versteckt || []);
         })
         .catch(() => {});
     };
@@ -57,13 +61,14 @@ export function useKategorien() {
     };
   }, []);
 
-  const alle: Category[] = [...eingebautAlle, ...eigene];
+  const sichtbar = (k: Category) => !versteckt.includes(k.slug);
+  const alle: Category[] = [...eingebautAlle, ...eigene].filter(sichtbar);
   const haupt: Category[] = [
     ...eingebautHaupt,
     ...eigene.filter((k) => !k.parent),
-  ];
+  ].filter(sichtbar);
   const finde = (slug: string) => alle.find((c) => c.slug === slug);
   const unter = (slug: string) => alle.filter((c) => c.parent === slug);
 
-  return { alle, haupt, eigene, finde, unter };
+  return { alle, haupt, eigene, versteckt, finde, unter };
 }

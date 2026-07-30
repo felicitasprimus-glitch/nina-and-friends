@@ -22,6 +22,9 @@ function dateienStore() {
 function kategorienStore() {
   return getStore({ name: "nina-kategorien", consistency: "strong" });
 }
+function verstecktStore() {
+  return getStore({ name: "nina-kat-versteckt", consistency: "strong" });
+}
 
 function slugify(text) {
   return String(text)
@@ -515,6 +518,29 @@ export default async function handler(request) {
           await ks.delete(b.key);
         }
       }
+      return json({ ok: true });
+    }
+
+    // --- Ausgeblendete (eingebaute) Kategorien: auflisten ---
+    if (aktion === "versteckt" && request.method === "GET") {
+      const vs = verstecktStore();
+      const { blobs } = await vs.list();
+      return json({ versteckt: blobs.map((b) => b.key) });
+    }
+
+    // --- Eingebaute Kategorie ausblenden ---
+    if (aktion === "versteckt" && request.method === "POST") {
+      const body = await request.json();
+      if (!body.slug) return json({ error: "slug fehlt" }, 400);
+      await verstecktStore().set(String(body.slug), "1");
+      return json({ ok: true });
+    }
+
+    // --- Eingebaute Kategorie wieder einblenden ---
+    if (aktion === "versteckt" && request.method === "DELETE") {
+      const slug = url.searchParams.get("slug");
+      if (!slug) return json({ error: "slug fehlt" }, 400);
+      await verstecktStore().delete(slug);
       return json({ ok: true });
     }
 

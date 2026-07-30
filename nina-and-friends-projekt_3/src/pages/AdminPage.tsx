@@ -3,12 +3,14 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  Clock,
   Copy,
   ExternalLink,
   Eye,
   EyeOff,
   FileText,
   Heading,
+  Heart,
   Image as ImageIcon,
   Loader2,
   Lock,
@@ -25,6 +27,7 @@ import {
   Video,
 } from "lucide-react";
 import { useKategorien } from "../hooks/useKategorien";
+import { hauptKategorien as eingebauteHaupt } from "../data/content";
 import { CategoryIcon, KundenTeilen } from "../components/ui";
 import { supabaseAktiv, supabaseUploadSigniert, base64ZuBlob } from "../lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -505,15 +508,25 @@ const VORLAGEN_KATEGORIEN = [
   { id: "specials", label: "Specials" },
 ];
 
+const VORLAGE_PALETTE: Record<
+  string,
+  { g1: string; g2: string; badge: string; knopf: string }
+> = {
+  blush: { g1: "#EFD9E1", g2: "#DCBBC9", badge: "#9A6F82", knopf: "#8B5E73" },
+  warm: { g1: "#EEE1CD", g2: "#E0CBA6", badge: "#A88C63", knopf: "#8A7350" },
+  klar: { g1: "#DCE9DF", g2: "#C4DBCA", badge: "#4F8468", knopf: "#3C7A5A" },
+  fest: { g1: "#ECD4D9", g2: "#D9B2BB", badge: "#9C5560", knopf: "#7A2E3A" },
+};
+
 const VORLAGEN = [
-  { id: "kochevent", name: "Kochevent mit Freunden", kategorie: "kochevents", emoji: "\uD83C\uDF7D\uFE0F", untertitel: "Gemeinsam genie\u00DFen", beschreibung: "Ein Abend voller Genuss, guter Gespr\u00E4che und leckerer Rezepte.", dauer: "ca. 3 Stunden", design: "blush" },
-  { id: "brunch", name: "Brunch mit Freunden", kategorie: "kochevents", emoji: "\uD83E\uDD50", untertitel: "Entspannter Vormittag", beschreibung: "Leckere Rezepte f\u00FCr einen entspannten Vormittag.", dauer: "ca. 3 Stunden", design: "warm" },
-  { id: "kreativkueche", name: "Kreativk\u00FCche", kategorie: "kochevents", emoji: "\uD83C\uDF3F", untertitel: "Gew\u00FCrze & mehr", beschreibung: "Entdecke neue Aromen und kreiere deine eigenen Lieblingsrezepte.", dauer: "ca. 3 Stunden", design: "klar" },
-  { id: "backevent", name: "Backevent", kategorie: "backevents", emoji: "\uD83C\uDF5E", untertitel: "Sauerteig & mehr", beschreibung: "Lerne, backe und genie\u00DFe gemeinsam mit anderen Backbegeisterten.", dauer: "ca. 4 Stunden", design: "warm" },
-  { id: "verkostung", name: "Verkostung & Entdecken", kategorie: "verkostungen", emoji: "\uD83C\uDF77", untertitel: "Probieren & staunen", beschreibung: "Probieren, staunen und neue Lieblingsprodukte finden.", dauer: "ca. 2 Stunden", design: "klar" },
-  { id: "produkt", name: "Produkt-Highlight", kategorie: "verkostungen", emoji: "\u2728", untertitel: "Live erleben", beschreibung: "Erlebe unsere Produkte live und lass dich begeistern.", dauer: "ca. 2 Stunden", design: "blush" },
-  { id: "celebrate", name: "Let\u2019s celebrate!", kategorie: "specials", emoji: "\uD83E\uDD42", untertitel: "Besondere Momente", beschreibung: "Ein besonderer Anlass verdient besondere Momente.", dauer: "ca. 3 Stunden", design: "fest" },
-  { id: "special", name: "Special nur f\u00FCr dich", kategorie: "specials", emoji: "\uD83C\uDF81", untertitel: "Exklusiv", beschreibung: "Ein exklusives Event mit besonderen Highlights und \u00DCberraschungen.", dauer: "ca. 2-3 Stunden", design: "fest" },
+  { id: "kochevent", kategorie: "kochevents", design: "blush", emoji: "\uD83C\uDF7D\uFE0F", name: "Kochevent mit Freunden", haupt: "Kochevent", akzent: "mit Freunden", badge: "Gemeinsam genie\u00DFen", untertitel: "Gemeinsam genie\u00DFen", beschreibung: "Ein Abend voller Genuss, guter Gespr\u00E4che und leckerer Rezepte.", dauer: "ca. 3 Stunden" },
+  { id: "backevent", kategorie: "backevents", design: "warm", emoji: "\uD83C\uDF5E", name: "Backevent", haupt: "Backevent", akzent: "Sauerteig & mehr", badge: "", untertitel: "Sauerteig & mehr", beschreibung: "Lerne, backe und genie\u00DFe gemeinsam mit anderen Backbegeisterten.", dauer: "ca. 4 Stunden" },
+  { id: "celebrate", kategorie: "specials", design: "fest", emoji: "\uD83E\uDD42", name: "Let\u2019s celebrate!", haupt: "Let\u2019s", akzent: "celebrate!", badge: "", untertitel: "Besondere Momente", beschreibung: "Ein besonderer Anlass verdient besondere Momente.", dauer: "ca. 3 Stunden" },
+  { id: "verkostung", kategorie: "verkostungen", design: "klar", emoji: "\uD83C\uDF77", name: "Verkostung & Entdecken", haupt: "Verkostung", akzent: "& Entdecken", badge: "", untertitel: "Probieren & staunen", beschreibung: "Probieren, staunen und neue Lieblingsprodukte finden.", dauer: "ca. 2 Stunden" },
+  { id: "brunch", kategorie: "kochevents", design: "warm", emoji: "\uD83E\uDD50", name: "Brunch mit Freunden", haupt: "Brunch", akzent: "mit Freunden", badge: "", untertitel: "Entspannter Vormittag", beschreibung: "Leckere Rezepte f\u00FCr einen entspannten Vormittag.", dauer: "ca. 3 Stunden" },
+  { id: "kreativkueche", kategorie: "kochevents", design: "klar", emoji: "\uD83C\uDF3F", name: "Kreativk\u00FCche", haupt: "Kreativk\u00FCche", akzent: "Gew\u00FCrze & mehr", badge: "", untertitel: "Neue Aromen entdecken", beschreibung: "Entdecke neue Aromen und kreiere deine eigenen Lieblingsrezepte.", dauer: "ca. 3 Stunden" },
+  { id: "special", kategorie: "specials", design: "fest", emoji: "\uD83C\uDF81", name: "Special nur f\u00FCr dich", haupt: "Special", akzent: "nur f\u00FCr dich", badge: "F\u00DCR DICH", untertitel: "Nur f\u00FCr dich", beschreibung: "Ein exklusives Event mit besonderen Highlights und \u00DCberraschungen.", dauer: "ca. 2-3 Stunden" },
+  { id: "produkt", kategorie: "verkostungen", design: "blush", emoji: "\u2728", name: "Produkt-Highlight", haupt: "Produkt-Highlight", akzent: "Live erleben", badge: "PRODUKT-HIGHLIGHT", untertitel: "Live erleben", beschreibung: "Erlebe unsere Produkte live und lass dich begeistern.", dauer: "ca. 2 Stunden" },
 ];
 
 function Baukasten({ token, abmelden }: { token: string; abmelden: () => void }) {
@@ -883,49 +896,62 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
           <div className="grid grid-cols-2 gap-3">
             {VORLAGEN.filter(
               (v) => vorlageFilter === "alle" || v.kategorie === vorlageFilter
-            ).map((v) => (
-              <div
-                key={v.id}
-                className="flex flex-col overflow-hidden rounded-2xl border border-greige-200 bg-white"
-              >
+            ).map((v) => {
+              const p = VORLAGE_PALETTE[v.design] || VORLAGE_PALETTE.blush;
+              return (
                 <div
-                  className="flex h-[76px] items-center justify-center text-[32px]"
-                  style={{
-                    background:
-                      v.design === "blush"
-                        ? "linear-gradient(135deg,#F3E3E8,#E7D3DC)"
-                        : v.design === "warm"
-                        ? "linear-gradient(135deg,#F4EBDD,#EADCC7)"
-                        : v.design === "klar"
-                        ? "linear-gradient(135deg,#E6EEE8,#D6E5DA)"
-                        : "linear-gradient(135deg,#F0DEE2,#E3C9CF)",
-                  }}
+                  key={v.id}
+                  className="flex flex-col overflow-hidden rounded-2xl border border-greige-200 bg-white shadow-sm"
                 >
-                  <span>{v.emoji}</span>
-                </div>
-                <div className="flex flex-1 flex-col p-3">
-                  <div className="serif text-[16px] font-semibold leading-tight text-ink">
-                    {v.name}
-                  </div>
-                  <div className="mt-0.5 text-[12px] font-medium text-taupe-600">
-                    {v.untertitel}
-                  </div>
-                  <p className="mt-1.5 text-[12px] leading-snug text-ink-mute">
-                    {v.beschreibung}
-                  </p>
-                  <p className="mt-2 text-[11.5px] text-ink-mute">
-                    {"Dauer: " + v.dauer}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => vorlageWaehlen(v)}
-                    className="mt-3 h-10 w-full rounded-lg bg-taupe-500 text-[13px] font-medium text-offwhite transition hover:bg-taupe-600"
+                  <div
+                    className="relative h-28 overflow-hidden"
+                    style={{ background: "linear-gradient(135deg, " + p.g1 + ", " + p.g2 + ")" }}
                   >
-                    {"Diese Vorlage w\u00E4hlen"}
-                  </button>
+                    <span className="pointer-events-none absolute -right-3 -top-4 select-none text-[72px] opacity-25">
+                      {v.emoji}
+                    </span>
+                    {v.badge ? (
+                      <span
+                        className="absolute bottom-2.5 right-2.5 flex h-14 w-14 items-center justify-center rounded-full px-1 text-center text-[8px] font-semibold uppercase leading-tight tracking-wide text-white"
+                        style={{ background: p.badge }}
+                      >
+                        {v.badge}
+                      </span>
+                    ) : (
+                      <span className="absolute bottom-3 right-3 text-white/70">
+                        <Heart className="h-4 w-4" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5">
+                    <div className="serif text-[19px] font-semibold leading-none text-ink">
+                      {v.haupt}
+                    </div>
+                    <div
+                      className="mt-0.5 text-[20px] leading-tight"
+                      style={{ color: p.knopf, fontFamily: "'Dancing Script', cursive" }}
+                    >
+                      {v.akzent}
+                    </div>
+                    <p className="mt-2 text-[12px] leading-snug text-ink-mute">
+                      {v.beschreibung}
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[11.5px] text-ink-mute">
+                      <Clock className="h-3.5 w-3.5" />
+                      {"Dauer: " + v.dauer}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => vorlageWaehlen(v)}
+                      className="mt-3 h-10 w-full rounded-lg text-[13px] font-medium text-white transition hover:brightness-95"
+                      style={{ background: p.knopf }}
+                    >
+                      {"Diese Vorlage w\u00E4hlen"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -1755,6 +1781,7 @@ function KategorieVerwaltung({
   const api = useApi(token, abmelden);
   const { haupt } = useKategorien();
   const [eigene, setEigene] = useState<EigeneKat[]>([]);
+  const [versteckt, setVersteckt] = useState<string[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [titel, setTitel] = useState("");
   const [icon, setIcon] = useState("Sparkles");
@@ -1768,6 +1795,8 @@ function KategorieVerwaltung({
     try {
       const d = await api("kategorien");
       setEigene(d.kategorien || []);
+      const v = await api("versteckt");
+      setVersteckt(v.versteckt || []);
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Fehler beim Laden.");
     } finally {
@@ -1814,6 +1843,29 @@ function KategorieVerwaltung({
       setEigene((l) => l.filter((k) => k.slug !== slug && k.parent !== slug));
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Loeschen fehlgeschlagen.");
+    }
+  };
+
+  const umschalten = async (slug: string, ausblenden: boolean) => {
+    setFehler("");
+    // sofort im UI umschalten
+    setVersteckt((l) =>
+      ausblenden ? [...l, slug] : l.filter((s) => s !== slug)
+    );
+    try {
+      if (ausblenden) {
+        await api("versteckt", {
+          method: "POST",
+          body: JSON.stringify({ slug }),
+        });
+      } else {
+        await api("versteckt?slug=" + encodeURIComponent(slug), {
+          method: "DELETE",
+        });
+      }
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Hat nicht geklappt.");
+      await laden();
     }
   };
 
@@ -1905,6 +1957,56 @@ function KategorieVerwaltung({
           )}
           Kategorie anlegen
         </button>
+      </div>
+
+      <h2 className="mb-2 text-[15px] font-semibold text-ink">
+        Eingebaute Kategorien
+      </h2>
+      <p className="mb-3 text-[12.5px] text-ink-mute">
+        {"Diese kannst du ausblenden (dann verschwinden sie \u00FCberall) und jederzeit wieder einblenden."}
+      </p>
+      <div className="mb-6 space-y-2">
+        {eingebauteHaupt.map((k) => {
+          const aus = versteckt.includes(k.slug);
+          return (
+            <div
+              key={k.slug}
+              className={
+                "flex items-center gap-3 rounded-xl border bg-white p-3 " +
+                (aus ? "border-greige-200 opacity-60" : "border-greige-200")
+              }
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+                <CategoryIcon name={k.icon} className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
+                {k.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => umschalten(k.slug, !aus)}
+                className={
+                  "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition " +
+                  (aus
+                    ? "border-taupe-400 bg-taupe-50 text-taupe-700 hover:bg-taupe-100"
+                    : "border-greige-200 text-ink-soft hover:bg-greige-100")
+                }
+              >
+                {aus ? (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    Einblenden
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    Ausblenden
+                  </>
+                )}
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       <h2 className="mb-3 text-[15px] font-semibold text-ink">

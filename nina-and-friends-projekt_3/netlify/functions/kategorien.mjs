@@ -11,7 +11,17 @@ export default async function handler() {
       await Promise.all(blobs.map((b) => store.get(b.key, { type: "json" })))
     ).filter(Boolean);
     alle.sort((a, b) => (a.erstellt || 0) - (b.erstellt || 0));
-    return new Response(JSON.stringify({ kategorien: alle }), {
+
+    let versteckt = [];
+    try {
+      const vs = getStore({ name: "nina-kat-versteckt", consistency: "strong" });
+      const res = await vs.list();
+      versteckt = res.blobs.map((b) => b.key);
+    } catch {
+      versteckt = [];
+    }
+
+    return new Response(JSON.stringify({ kategorien: alle, versteckt }), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
