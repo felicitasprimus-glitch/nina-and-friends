@@ -86,7 +86,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { ContentItem, ContentType } from "../types";
-import { T, getCategory, typeLabels, hauptKategorien } from "../data/content";
+import { T, getCategory, typeLabels } from "../data/content";
+import { useKategorien } from "../hooks/useKategorien";
 import { useFavorites } from "../hooks/useFavorites";
 import logoLight from "../assets/logo-light.png";
 import logoDark from "../assets/logo-dark.png";
@@ -267,6 +268,7 @@ function MenuDrawer({
   offen: boolean;
   schliessen: () => void;
 }) {
+  const { haupt } = useKategorien();
   if (!offen) return null;
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
@@ -314,7 +316,7 @@ function MenuDrawer({
             {"Bereiche"}
           </div>
           <div className="space-y-1">
-            {hauptKategorien.map((k) => (
+            {haupt.map((k) => (
               <Link
                 key={k.slug}
                 to={"/bereich/" + k.slug}

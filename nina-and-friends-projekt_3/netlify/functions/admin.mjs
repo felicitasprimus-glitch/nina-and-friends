@@ -19,6 +19,20 @@ function medienStore() {
 function dateienStore() {
   return getStore({ name: "nina-dateien", consistency: "strong" });
 }
+function kategorienStore() {
+  return getStore({ name: "nina-kategorien", consistency: "strong" });
+}
+
+function slugify(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/\u00E4/g, "ae")
+    .replace(/\u00F6/g, "oe")
+    .replace(/\u00FC/g, "ue")
+    .replace(/\u00DF/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 // Datei-Datensatz in die Form fuer App/Admin bringen
 function dateiAusgabe(r) {
@@ -446,6 +460,59 @@ export default async function handler(request) {
           } catch {
             // egal
           }
+        }
+      }
+      return json({ ok: true });
+    }
+
+    // --- Eigene Kategorien: auflisten ---
+    if (aktion === "kategorien" && request.method === "GET") {
+      const ks = kategorienStore();
+      const { blobs } = await ks.list();
+      const alle = (
+        await Promise.all(blobs.map((b) => ks.get(b.key, { type: "json" })))
+      ).filter(Boolean);
+      alle.sort((a, b) => (a.erstellt || 0) - (b.erstellt || 0));
+      return json({ kategorien: alle });
+    }
+
+    // --- Eigene Kategorie anlegen ---
+    if (aktion === "kategorien" && request.method === "POST") {
+      const body = await request.json();
+      const titel = String(body.titel || "").trim();
+      if (!titel) return json({ error: "Bitte einen Namen angeben." }, 400);
+      let slug = slugify(titel);
+      if (!slug) slug = "kategorie";
+      const ks = kategorienStore();
+      // eindeutigen Slug sicherstellen
+      let s = slug;
+      let n = 2;
+      while (await ks.get(s, { type: "json" })) {
+        s = slug + "-" + n;
+        n += 1;
+      }
+      const rec = {
+        slug: s,
+        title: titel,
+        icon: body.icon || "Folder",
+        parent: body.parent || "",
+        erstellt: Date.now(),
+      };
+      await ks.setJSON(s, rec);
+      return json({ kategorie: rec });
+    }
+
+    // --- Eigene Kategorie loeschen ---
+    if (aktion === "kategorien" && request.method === "DELETE") {
+      const slug = url.searchParams.get("slug");
+      if (!slug) return json({ error: "slug fehlt" }, 400);
+      const ks = kategorienStore();
+      // auch direkte Unterkategorien mitloeschen
+      const { blobs } = await ks.list();
+      for (const b of blobs) {
+        const k = await ks.get(b.key, { type: "json" });
+        if (k && (k.slug === slug || k.parent === slug)) {
+          await ks.delete(b.key);
         }
       }
       return json({ ok: true });

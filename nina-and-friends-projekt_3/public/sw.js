@@ -1,5 +1,5 @@
 // Einfacher Service Worker fuer Installierbarkeit und Offline-Grundfunktion.
-const CACHE = "naf-v1";
+const CACHE = "naf-v3";
 const CORE = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -19,6 +19,18 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+
+  // Dynamische Daten (Dateien, Seiten, Kategorien, Inhalte) immer frisch aus
+  // dem Netz holen - niemals aus dem Cache, damit Neues sofort erscheint.
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/.netlify/")
+  ) {
+    event.respondWith(fetch(req).catch(() => caches.match(req)));
+    return;
+  }
 
   // Navigationsanfragen: Netzwerk zuerst, bei Offline Fallback auf index.html (SPA)
   if (req.mode === "navigate") {

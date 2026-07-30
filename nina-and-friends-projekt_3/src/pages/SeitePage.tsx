@@ -166,6 +166,93 @@ function BausteinAnzeige({ b }: { b: Baustein }) {
     );
   }
 
+  if (typ === "profil") {
+    let p: Record<string, string> = {};
+    try {
+      const o = JSON.parse(b.text || "{}");
+      if (o && typeof o === "object") p = o;
+    } catch {
+      p = {};
+    }
+    const stile: Record<string, {
+      karte: string;
+      rand: string;
+      name: string;
+      rolle: string;
+      knopfBg: string;
+      knopfText: string;
+      radius: number;
+      knopfRadius: number;
+    }> = {
+      warm: { karte: "#FBF9F5", rand: "#EAE3D8", name: "#2E2B26", rolle: "#7A6F5C", knopfBg: "#948A7C", knopfText: "#FBF9F5", radius: 18, knopfRadius: 999 },
+      elegant: { karte: "#241A1D", rand: "#3A2A2E", name: "#F6EEE2", rolle: "#C9A24B", knopfBg: "#C9A24B", knopfText: "#241A1D", radius: 6, knopfRadius: 6 },
+      klar: { karte: "#FFFFFF", rand: "#E7E4DE", name: "#1B1B1A", rolle: "#3C7A5A", knopfBg: "#1B1B1A", knopfText: "#FFFFFF", radius: 14, knopfRadius: 10 },
+      blush: { karte: "#F6F1EC", rand: "#E7DDD2", name: "#3D3229", rolle: "#8B5E73", knopfBg: "#8B5E73", knopfText: "#FBF7F4", radius: 24, knopfRadius: 999 },
+    };
+    const s = stile[p.design] || stile.warm;
+    const mitHttp = (u: string) => {
+      const x = (u || "").trim();
+      if (!x) return "";
+      return /^(https?:\/\/|mailto:|tel:)/i.test(x) ? x : "https://" + x;
+    };
+    const knoepfe: { href: string; label: string }[] = [];
+    if (p.whatsapp) {
+      const n = p.whatsapp.replace(/[^0-9]/g, "");
+      if (n) knoepfe.push({ href: "https://wa.me/" + n, label: "Auf WhatsApp schreiben" });
+    }
+    if (p.instagram) {
+      const h = p.instagram.replace(/^@/, "").trim();
+      if (h) knoepfe.push({ href: "https://instagram.com/" + h, label: "Auf Instagram folgen" });
+    }
+    if (p.shop) knoepfe.push({ href: mitHttp(p.shop), label: "Zum Shop" });
+    if (p.email) knoepfe.push({ href: "mailto:" + p.email.trim(), label: "E-Mail schreiben" });
+    if (p.telefon) {
+      const t = p.telefon.replace(/[^0-9+]/g, "");
+      if (t) knoepfe.push({ href: "tel:" + t, label: "Anrufen" });
+    }
+    if (p.website) knoepfe.push({ href: mitHttp(p.website), label: "Website ansehen" });
+
+    return (
+      <div
+        className="mx-auto my-6 max-w-[420px] px-6 py-7 text-center"
+        style={{ background: s.karte, border: "1px solid " + s.rand, borderRadius: s.radius }}
+      >
+        {b.medienUrl ? (
+          <img
+            src={b.medienUrl}
+            alt=""
+            className="mx-auto mb-3.5 object-cover"
+            style={{ width: 104, height: 104, borderRadius: 999, border: "3px solid rgba(255,255,255,.65)" }}
+          />
+        ) : null}
+        <div className="serif text-[24px] font-semibold leading-tight" style={{ color: s.name }}>
+          {p.name || ""}
+        </div>
+        {p.rolle ? (
+          <div className="mt-1 text-[14px]" style={{ color: s.rolle }}>
+            {p.rolle}
+          </div>
+        ) : null}
+        {knoepfe.length > 0 ? (
+          <div className="mt-4 flex flex-col gap-2.5">
+            {knoepfe.map((k, i) => (
+              <a
+                key={i}
+                href={k.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block px-4 py-3 text-[14.5px] font-semibold no-underline"
+                style={{ background: s.knopfBg, color: s.knopfText, borderRadius: s.knopfRadius }}
+              >
+                {k.label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   // Standard: Text
   if (!b.text) return null;
   return (

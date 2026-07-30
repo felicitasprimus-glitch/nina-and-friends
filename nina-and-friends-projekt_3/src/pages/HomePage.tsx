@@ -10,7 +10,8 @@ import {
   SectionHeader,
   TrainingCard,
 } from "../components/ui";
-import { T, hauptKategorien } from "../data/content";
+import { T } from "../data/content";
+import { useKategorien } from "../hooks/useKategorien";
 import { useHomeTrainings } from "../hooks/useContent";
 
 const quickTiles = [
@@ -27,6 +28,7 @@ const quickTiles = [
 export default function HomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  const { haupt } = useKategorien();
   const homeTrainings = useHomeTrainings();
 
   const goSearch = () => {
@@ -98,7 +100,7 @@ export default function HomePage() {
       <section>
         <SectionHeader title={T.allAreas} linkTo="/bereich/aktuelles" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {hauptKategorien.map((c) => (
+          {haupt.map((c) => (
             <CategoryTile key={c.slug} slug={c.slug} title={c.title} icon={c.icon} />
           ))}
         </div>

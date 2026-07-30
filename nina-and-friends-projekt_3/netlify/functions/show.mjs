@@ -47,6 +47,65 @@ function embedUrl(link) {
 }
 
 // Einen Baustein in HTML umwandeln
+const PROFIL_STYLE = {
+  warm: { karte: "#FBF9F5", rand: "#EAE3D8", name: "#2E2B26", rolle: "#7A6F5C", knopfBg: "#948A7C", knopfText: "#FBF9F5", radius: "18px", knopfRadius: "999px" },
+  elegant: { karte: "#241A1D", rand: "#3A2A2E", name: "#F6EEE2", rolle: "#C9A24B", knopfBg: "#C9A24B", knopfText: "#241A1D", radius: "6px", knopfRadius: "6px" },
+  klar: { karte: "#FFFFFF", rand: "#E7E4DE", name: "#1B1B1A", rolle: "#3C7A5A", knopfBg: "#1B1B1A", knopfText: "#FFFFFF", radius: "14px", knopfRadius: "10px" },
+  blush: { karte: "#F6F1EC", rand: "#E7DDD2", name: "#3D3229", rolle: "#8B5E73", knopfBg: "#8B5E73", knopfText: "#FBF7F4", radius: "24px", knopfRadius: "999px" },
+};
+
+function mitHttp(u) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s) || /^(mailto|tel):/i.test(s)) return s;
+  return "https://" + s;
+}
+
+function profilKarteHtml(b) {
+  let p = {};
+  try {
+    p = JSON.parse(b.text || "{}") || {};
+  } catch {
+    p = {};
+  }
+  const s = PROFIL_STYLE[p.design] || PROFIL_STYLE.warm;
+
+  const knoepfe = [];
+  if (p.whatsapp) {
+    const n = String(p.whatsapp).replace(/[^0-9]/g, "");
+    if (n) knoepfe.push({ href: "https://wa.me/" + n, label: "Auf WhatsApp schreiben" });
+  }
+  if (p.instagram) {
+    const h = String(p.instagram).replace(/^@/, "").trim();
+    if (h) knoepfe.push({ href: "https://instagram.com/" + encodeURIComponent(h), label: "Auf Instagram folgen" });
+  }
+  if (p.shop) knoepfe.push({ href: mitHttp(p.shop), label: "Zum Shop" });
+  if (p.email) knoepfe.push({ href: "mailto:" + String(p.email).trim(), label: "E-Mail schreiben" });
+  if (p.telefon) {
+    const t = String(p.telefon).replace(/[^0-9+]/g, "");
+    if (t) knoepfe.push({ href: "tel:" + t, label: "Anrufen" });
+  }
+  if (p.website) knoepfe.push({ href: mitHttp(p.website), label: "Website ansehen" });
+
+  const foto = b.medien
+    ? `<img class="profilfoto" src="${esc(b.medien)}" alt="${esc(p.name || "")}">`
+    : "";
+  const rolle = p.rolle ? `<div class="profilrolle" style="color:${s.rolle}">${esc(p.rolle)}</div>` : "";
+  const knopfHtml = knoepfe
+    .map(
+      (k) =>
+        `<a href="${esc(k.href)}" target="_blank" rel="noopener" style="background:${s.knopfBg};color:${s.knopfText};border-radius:${s.knopfRadius}">${esc(k.label)}</a>`
+    )
+    .join("");
+
+  return `<div class="profilkarte" style="background:${s.karte};border:1px solid ${s.rand};border-radius:${s.radius}">
+    ${foto}
+    <div class="profilname" style="color:${s.name}">${esc(p.name || "")}</div>
+    ${rolle}
+    ${knopfHtml ? `<div class="profilknoepfe">${knopfHtml}</div>` : ""}
+  </div>`;
+}
+
 function bausteinHtml(b) {
   const typ = (b.typ || "text").toLowerCase();
 
@@ -102,6 +161,8 @@ function bausteinHtml(b) {
       b.knopftext || "Jetzt ansehen"
     )}</a>`;
   }
+
+  if (typ === "profil") return profilKarteHtml(b);
 
   if (typ === "trenner") return `<hr>`;
 
@@ -222,6 +283,18 @@ ${vorschaubild ? `<meta name="twitter:image" content="${esc(vorschaubild)}">` : 
     text-align:center;color:var(--muted);font-size:15px}
 
   @media(min-width:640px){h1{font-size:44px}h2{font-size:30px}p{font-size:16.5px}}
+
+  .profilkarte{max-width:420px;margin:26px auto;padding:28px 22px;text-align:center}
+  .profilfoto{width:104px;height:104px;border-radius:999px;object-fit:cover;
+    margin:0 auto 14px;display:block;border:3px solid rgba(255,255,255,.65);
+    box-shadow:0 6px 18px rgba(60,52,40,.12)}
+  .profilname{font-family:var(--display);font-size:24px;font-weight:600;line-height:1.15}
+  .profilrolle{font-size:14px;margin-top:5px;letter-spacing:.02em}
+  .profilknoepfe{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+  .profilknoepfe a{display:block;text-decoration:none;padding:13px 18px;
+    font-size:14.5px;font-weight:600;transition:filter .15s}
+  .profilknoepfe a:hover{filter:brightness(.95)}
+
   ${t.extra}
 </style>
 </head>

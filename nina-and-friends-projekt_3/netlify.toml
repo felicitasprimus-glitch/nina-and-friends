@@ -36,6 +36,12 @@
   to = "/.netlify/functions/dateien"
   status = 200
 
+# Eigene Kategorien fuer die App (Lesezugriff)
+[[redirects]]
+  from = "/api/kategorien"
+  to = "/.netlify/functions/kategorien"
+  status = 200
+
 # Oeffentliche Kunden-Seiten (servergerendert, mit WhatsApp-Vorschau)
 [[redirects]]
   from = "/s/*"

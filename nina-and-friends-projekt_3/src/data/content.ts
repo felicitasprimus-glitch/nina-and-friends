@@ -234,7 +234,7 @@ const body = (title: string) =>
   title +
   "\u201C.\n\nIn der sp\u00E4teren Live-Version steht hier der vollst\u00E4ndige Inhalt: Texte, Bilder, Downloads oder Videos.\n\nSo kannst du dir jetzt schon anschauen, wie sich die Plattform anf\u00FChlt: Navigation, Suche, Favoriten, Kopieren und Teilen funktionieren bereits.";
 
-export const contents: ContentItem[] = [
+const alleInhalte: ContentItem[] = [
   // Fuer dich heute
   {
     id: "monatsaktion-juli",
@@ -828,6 +828,14 @@ export const contents: ContentItem[] = [
     date: "2026-06-29",
   },
 ];
+
+// Nur echte Inhalte anzeigen: die Monatsmeetings (mit Erinnerungen verknuepft)
+// bleiben, alle eingebauten Demo-/Beispielkarten werden ausgeblendet.
+export const contents: ContentItem[] = alleInhalte.filter(
+  (c) =>
+    c.categorySlug === "team-termine" &&
+    !(c.body || "").startsWith("Dies ist ein Demo-Inhalt")
+);
 
 export const featuredItems = contents.filter((c) => c.featured);
 

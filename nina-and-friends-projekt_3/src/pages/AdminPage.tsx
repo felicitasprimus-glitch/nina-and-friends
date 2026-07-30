@@ -18,11 +18,14 @@ import {
   MousePointerClick,
   Plus,
   Save,
+  Tags,
   Trash2,
   Upload,
+  UserRound,
   Video,
 } from "lucide-react";
-import { alleKategorien, getCategory } from "../data/content";
+import { useKategorien } from "../hooks/useKategorien";
+import { CategoryIcon, KundenTeilen } from "../components/ui";
 import { supabaseAktiv, supabaseUploadSigniert, base64ZuBlob } from "../lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
@@ -35,6 +38,7 @@ type Bausteintyp =
   | "Video"
   | "Datei"
   | "Knopf"
+  | "Profil"
   | "Trenner";
 
 interface Baustein {
@@ -72,6 +76,7 @@ const typInfo: Record<Bausteintyp, { label: string; icon: typeof FileText; hilfe
   Video: { label: "Video", icon: Video, hilfe: "YouTube- oder Vimeo-Link einfuegen - wird direkt abspielbar." },
   Datei: { label: "Datei / PDF", icon: FileText, hilfe: "PDF hochladen. Erscheint als Knopf zum Herunterladen." },
   Knopf: { label: "Knopf", icon: MousePointerClick, hilfe: "Zum Beispiel Bestell-Link oder WhatsApp." },
+  Profil: { label: "Profil-Karte", icon: UserRound, hilfe: "Foto, Name, Rolle und Knoepfe (WhatsApp, Instagram, Shop ...)." },
   Trenner: { label: "Trennlinie", icon: Minus, hilfe: "Feine Linie zwischen zwei Abschnitten." },
 };
 
@@ -197,6 +202,109 @@ function Anmeldung({ onToken }: { onToken: (t: string) => void }) {
 
 /* ---------- Baustein bearbeiten ---------- */
 
+const PROFIL_DESIGNS = [
+  { id: "warm", name: "Warm", bg: "#FBF9F5", akzent: "#948A7C" },
+  { id: "elegant", name: "Elegant", bg: "#FBF7F1", akzent: "#7A2E3A" },
+  { id: "klar", name: "Klar", bg: "#FFFFFF", akzent: "#3C7A5A" },
+  { id: "blush", name: "Verspielt", bg: "#F6F1EC", akzent: "#8B5E73" },
+];
+
+const PROFIL_FELDER = [
+  { key: "whatsapp", label: "WhatsApp-Nummer (z. B. 491701234567)" },
+  { key: "instagram", label: "Instagram (Benutzername ohne @)" },
+  { key: "shop", label: "Shop-Link (https://...)" },
+  { key: "email", label: "E-Mail" },
+  { key: "telefon", label: "Telefon" },
+  { key: "website", label: "Website (https://...)" },
+];
+
+function profilLesen(text: string): Record<string, string> {
+  try {
+    const o = JSON.parse(text);
+    return o && typeof o === "object" ? o : {};
+  } catch {
+    return {};
+  }
+}
+
+function ProfilFelder({
+  baustein,
+  onAendern,
+}: {
+  baustein: Baustein;
+  onAendern: (aenderung: Partial<Baustein>) => void;
+}) {
+  const daten = profilLesen(baustein.text);
+  const design = daten.design || "warm";
+  const setzen = (key: string, wert: string) => {
+    onAendern({ text: JSON.stringify({ ...daten, [key]: wert }) });
+  };
+
+  return (
+    <div className="mt-2 space-y-3">
+      <input
+        value={daten.name || ""}
+        onChange={(e) => setzen("name", e.target.value)}
+        placeholder="Name"
+        className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14px] outline-none focus:border-taupe-400"
+      />
+      <input
+        value={daten.rolle || ""}
+        onChange={(e) => setzen("rolle", e.target.value)}
+        placeholder="Rolle, z. B. Pampered Chef Beraterin"
+        className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14px] outline-none focus:border-taupe-400"
+      />
+
+      <div>
+        <label className="mb-1.5 block text-[12px] font-medium text-ink-soft">
+          Design
+        </label>
+        <div className="grid grid-cols-4 gap-2">
+          {PROFIL_DESIGNS.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              onClick={() => setzen("design", d.id)}
+              className={
+                "flex flex-col items-center gap-1 rounded-lg border p-2 transition " +
+                (design === d.id
+                  ? "border-taupe-500 ring-1 ring-taupe-400"
+                  : "border-greige-200 hover:bg-greige-100")
+              }
+            >
+              <span
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-greige-200"
+                style={{ background: d.bg }}
+              >
+                <span
+                  className="h-3.5 w-3.5 rounded-full"
+                  style={{ background: d.akzent }}
+                />
+              </span>
+              <span className="text-[11px] text-ink-soft">{d.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-[12px] font-medium text-ink-soft">
+          {"Kn\u00F6pfe (leere Felder werden nicht angezeigt)"}
+        </p>
+        {PROFIL_FELDER.map((f) => (
+          <input
+            key={f.key}
+            value={daten[f.key] || ""}
+            onChange={(e) => setzen(f.key, e.target.value)}
+            placeholder={f.label}
+            className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14px] outline-none focus:border-taupe-400"
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BausteinKarte({
   baustein,
   onAendern,
@@ -277,7 +385,7 @@ function BausteinKarte({
         </button>
       </div>
 
-      {baustein.typ !== "Trenner" ? (
+      {baustein.typ !== "Trenner" && baustein.typ !== "Profil" ? (
         <textarea
           value={baustein.text}
           onChange={(e) => onAendern({ text: e.target.value })}
@@ -317,7 +425,10 @@ function BausteinKarte({
         />
       ) : null}
 
-      {baustein.typ === "Bild" || baustein.typ === "Datei" || baustein.typ === "Video" ? (
+      {baustein.typ === "Bild" ||
+      baustein.typ === "Datei" ||
+      baustein.typ === "Video" ||
+      baustein.typ === "Profil" ? (
         <div className="mt-2">
           {baustein.medienUrl ? (
             <div className="mb-2 flex items-center gap-3 rounded-md border border-greige-200 bg-offwhite p-2">
@@ -346,18 +457,30 @@ function BausteinKarte({
             {laedtHoch
               ? "Wird hochgeladen ..."
               : baustein.medienUrl
-              ? "Datei ersetzen"
+              ? baustein.typ === "Profil"
+                ? "Foto ersetzen"
+                : "Datei ersetzen"
               : baustein.typ === "Bild"
               ? "Bild hochladen"
+              : baustein.typ === "Profil"
+              ? "Foto hochladen"
               : "Datei hochladen"}
             <input
               type="file"
               onChange={dateiWaehlen}
-              accept={baustein.typ === "Bild" ? "image/*" : undefined}
+              accept={
+                baustein.typ === "Bild" || baustein.typ === "Profil"
+                  ? "image/*"
+                  : undefined
+              }
               className="hidden"
             />
           </label>
         </div>
+      ) : null}
+
+      {baustein.typ === "Profil" ? (
+        <ProfilFelder baustein={baustein} onAendern={onAendern} />
       ) : null}
 
       <p className="mt-2 text-[11.5px] leading-snug text-ink-mute">{info.hilfe}</p>
@@ -368,10 +491,29 @@ function BausteinKarte({
 /* ---------- Baukasten ---------- */
 
 const DESIGNS = [
-  { id: "creme", name: "K\u00FCche & Creme", bg: "#FBF9F5", akzent: "#948A7C", serif: true },
-  { id: "klar", name: "Klar & Modern", bg: "#FFFFFF", akzent: "#3C7A5A", serif: false },
-  { id: "fest", name: "Fest & Gold", bg: "#FBF7F1", akzent: "#7A2E3A", serif: true },
-  { id: "blush", name: "Warm & Verspielt", bg: "#F6F1EC", akzent: "#8B5E73", serif: true },
+  { id: "creme", name: "K\u00FCche & Creme", bg: "#FBF9F5", ink: "#2E2B26", muted: "#5C564E", akzent: "#948A7C", akzentInk: "#F8F6F2", radius: 12, font: "'Cormorant Garamond',Georgia,serif" },
+  { id: "klar", name: "Klar & Modern", bg: "#FFFFFF", ink: "#1B1B1A", muted: "#55524C", akzent: "#3C7A5A", akzentInk: "#FFFFFF", radius: 8, font: "'Outfit',system-ui,sans-serif" },
+  { id: "fest", name: "Fest & Gold", bg: "#FBF7F1", ink: "#34252A", muted: "#6E5A5E", akzent: "#7A2E3A", akzentInk: "#FBF7F1", radius: 4, font: "'Playfair Display',Georgia,serif" },
+  { id: "blush", name: "Warm & Verspielt", bg: "#F6F1EC", ink: "#3D3229", muted: "#6B5B4E", akzent: "#8B5E73", akzentInk: "#FBF7F4", radius: 18, font: "'Fraunces',Georgia,serif" },
+];
+
+const VORLAGEN_KATEGORIEN = [
+  { id: "alle", label: "Alle Vorlagen" },
+  { id: "kochevents", label: "Kochevents" },
+  { id: "backevents", label: "Backevents" },
+  { id: "verkostungen", label: "Verkostungen" },
+  { id: "specials", label: "Specials" },
+];
+
+const VORLAGEN = [
+  { id: "kochevent", name: "Kochevent mit Freunden", kategorie: "kochevents", emoji: "\uD83C\uDF7D\uFE0F", untertitel: "Gemeinsam genie\u00DFen", beschreibung: "Ein Abend voller Genuss, guter Gespr\u00E4che und leckerer Rezepte.", dauer: "ca. 3 Stunden", design: "blush" },
+  { id: "brunch", name: "Brunch mit Freunden", kategorie: "kochevents", emoji: "\uD83E\uDD50", untertitel: "Entspannter Vormittag", beschreibung: "Leckere Rezepte f\u00FCr einen entspannten Vormittag.", dauer: "ca. 3 Stunden", design: "warm" },
+  { id: "kreativkueche", name: "Kreativk\u00FCche", kategorie: "kochevents", emoji: "\uD83C\uDF3F", untertitel: "Gew\u00FCrze & mehr", beschreibung: "Entdecke neue Aromen und kreiere deine eigenen Lieblingsrezepte.", dauer: "ca. 3 Stunden", design: "klar" },
+  { id: "backevent", name: "Backevent", kategorie: "backevents", emoji: "\uD83C\uDF5E", untertitel: "Sauerteig & mehr", beschreibung: "Lerne, backe und genie\u00DFe gemeinsam mit anderen Backbegeisterten.", dauer: "ca. 4 Stunden", design: "warm" },
+  { id: "verkostung", name: "Verkostung & Entdecken", kategorie: "verkostungen", emoji: "\uD83C\uDF77", untertitel: "Probieren & staunen", beschreibung: "Probieren, staunen und neue Lieblingsprodukte finden.", dauer: "ca. 2 Stunden", design: "klar" },
+  { id: "produkt", name: "Produkt-Highlight", kategorie: "verkostungen", emoji: "\u2728", untertitel: "Live erleben", beschreibung: "Erlebe unsere Produkte live und lass dich begeistern.", dauer: "ca. 2 Stunden", design: "blush" },
+  { id: "celebrate", name: "Let\u2019s celebrate!", kategorie: "specials", emoji: "\uD83E\uDD42", untertitel: "Besondere Momente", beschreibung: "Ein besonderer Anlass verdient besondere Momente.", dauer: "ca. 3 Stunden", design: "fest" },
+  { id: "special", name: "Special nur f\u00FCr dich", kategorie: "specials", emoji: "\uD83C\uDF81", untertitel: "Exklusiv", beschreibung: "Ein exklusives Event mit besonderen Highlights und \u00DCberraschungen.", dauer: "ca. 2-3 Stunden", design: "fest" },
 ];
 
 function Baukasten({ token, abmelden }: { token: string; abmelden: () => void }) {
@@ -390,6 +532,8 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
   const [meldung, setMeldung] = useState("");
   const [fehler, setFehler] = useState("");
   const [kopiert, setKopiert] = useState(false);
+  const [vorlageFilter, setVorlageFilter] = useState("alle");
+  const { alle: kategorien, finde: kategorieFinden } = useKategorien();
 
   const seitenLaden = useCallback(async () => {
     setLaedt(true);
@@ -454,6 +598,66 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
       setDesign("creme");
       setBereich("");
       setFuerKunden(false);
+      await seitenLaden();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+    } finally {
+      setLaedt(false);
+    }
+  };
+
+  const vorlageWaehlen = async (v: (typeof VORLAGEN)[number]) => {
+    const name = window.prompt("Wie soll dein Event heissen?", v.name);
+    if (!name || !name.trim()) return;
+    setLaedt(true);
+    setFehler("");
+    try {
+      const kopf = await api("bausteine", {
+        method: "POST",
+        body: JSON.stringify({
+          seite: name.trim(),
+          reihenfolge: 1,
+          typ: "Text",
+          text: "",
+          seitentitel: name.trim(),
+          seitentext: v.untertitel,
+          design: v.design,
+          fuerKunden: true,
+          aktiv: true,
+        }),
+      });
+      const neu: Baustein[] = [kopf.baustein];
+
+      const weitere: Partial<Baustein>[] = [
+        { typ: "Text", text: v.beschreibung },
+        { typ: "Ueberschrift", text: "Termin & Details" },
+        {
+          typ: "Text",
+          text:
+            "\uD83D\uDCC5 Datum: [bitte eintragen]\n\u23F0 Dauer: " +
+            v.dauer +
+            "\n\uD83D\uDCCD Ort: [bitte eintragen]",
+        },
+        { typ: "Knopf", text: "", knopftext: "Ich bin dabei", link: "" },
+      ];
+
+      let r = 2;
+      for (const b of weitere) {
+        const res = await api("bausteine", {
+          method: "POST",
+          body: JSON.stringify({ seite: name.trim(), reihenfolge: r, aktiv: true, ...b }),
+        });
+        neu.push(res.baustein);
+        r += 1;
+      }
+
+      setBausteine(neu);
+      setSeite(name.trim());
+      setTitel(name.trim());
+      setUntertitel(v.untertitel);
+      setDesign(v.design);
+      setBereich("");
+      setFuerKunden(true);
       await seitenLaden();
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
@@ -644,11 +848,92 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
         <button
           type="button"
           onClick={neueSeite}
-          className="mb-4 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600"
+          className="mb-6 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600"
         >
           <Plus className="h-[18px] w-[18px]" />
-          Neue Seite anlegen
+          Leere Seite anlegen
         </button>
+
+        <div className="mb-7">
+          <p className="serif text-center text-[22px] font-semibold leading-tight text-ink">
+            {"W\u00E4hle eine Vorlage"}
+          </p>
+          <p className="mb-4 mt-1 text-center text-[13px] text-ink-mute">
+            Gestalte dein Event in wenigen Schritten
+          </p>
+
+          <div className="mb-4 flex flex-wrap justify-center gap-1.5">
+            {VORLAGEN_KATEGORIEN.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setVorlageFilter(k.id)}
+                className={
+                  "rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition " +
+                  (vorlageFilter === k.id
+                    ? "bg-taupe-500 text-offwhite"
+                    : "border border-greige-200 bg-white text-ink-soft hover:bg-greige-100")
+                }
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {VORLAGEN.filter(
+              (v) => vorlageFilter === "alle" || v.kategorie === vorlageFilter
+            ).map((v) => (
+              <div
+                key={v.id}
+                className="flex flex-col overflow-hidden rounded-2xl border border-greige-200 bg-white"
+              >
+                <div
+                  className="flex h-[76px] items-center justify-center text-[32px]"
+                  style={{
+                    background:
+                      v.design === "blush"
+                        ? "linear-gradient(135deg,#F3E3E8,#E7D3DC)"
+                        : v.design === "warm"
+                        ? "linear-gradient(135deg,#F4EBDD,#EADCC7)"
+                        : v.design === "klar"
+                        ? "linear-gradient(135deg,#E6EEE8,#D6E5DA)"
+                        : "linear-gradient(135deg,#F0DEE2,#E3C9CF)",
+                  }}
+                >
+                  <span>{v.emoji}</span>
+                </div>
+                <div className="flex flex-1 flex-col p-3">
+                  <div className="serif text-[16px] font-semibold leading-tight text-ink">
+                    {v.name}
+                  </div>
+                  <div className="mt-0.5 text-[12px] font-medium text-taupe-600">
+                    {v.untertitel}
+                  </div>
+                  <p className="mt-1.5 text-[12px] leading-snug text-ink-mute">
+                    {v.beschreibung}
+                  </p>
+                  <p className="mt-2 text-[11.5px] text-ink-mute">
+                    {"Dauer: " + v.dauer}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => vorlageWaehlen(v)}
+                    className="mt-3 h-10 w-full rounded-lg bg-taupe-500 text-[13px] font-medium text-offwhite transition hover:bg-taupe-600"
+                  >
+                    {"Diese Vorlage w\u00E4hlen"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {seiten.length > 0 ? (
+          <p className="mb-3 text-[13px] font-semibold text-ink-soft">
+            Deine Seiten
+          </p>
+        ) : null}
 
         {laedt ? (
           <div className="flex items-center justify-center gap-2 py-10 text-ink-mute">
@@ -676,7 +961,7 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
                     {s.titel || s.name}
                   </span>
                   <span className="block truncate text-[12.5px] text-ink-mute">
-                    {getCategory(s.bereich)?.title || "Ohne Kategorie"}
+                    {kategorieFinden(s.bereich)?.title || "Ohne Kategorie"}
                     {" \u00B7 "}
                     {s.anzahl} Bausteine
                   </span>
@@ -736,44 +1021,73 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
           Design-Vorlage
         </label>
-        <div className="mb-3 grid grid-cols-2 gap-2">
-          {DESIGNS.map((d) => (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => setDesign(d.id)}
-              className={
-                "flex items-center gap-2.5 rounded-lg border p-2.5 text-left transition " +
-                (design === d.id
-                  ? "border-taupe-500 ring-1 ring-taupe-400"
-                  : "border-greige-200 hover:bg-greige-100")
-              }
-            >
-              <span
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-greige-200"
-                style={{ background: d.bg }}
+        <div className="mb-3 grid grid-cols-2 gap-2.5">
+          {DESIGNS.map((d) => {
+            const aktiv = design === d.id;
+            return (
+              <button
+                key={d.id}
+                type="button"
+                onClick={() => setDesign(d.id)}
+                className={
+                  "overflow-hidden rounded-xl border text-left transition " +
+                  (aktiv
+                    ? "border-taupe-500 ring-2 ring-taupe-400"
+                    : "border-greige-200 hover:border-taupe-300")
+                }
               >
-                <span
-                  className="text-[15px] leading-none"
-                  style={{
-                    color: d.akzent,
-                    fontFamily: d.serif ? "Georgia, serif" : "system-ui, sans-serif",
-                    fontWeight: 600,
-                  }}
+                <div
+                  className="px-3 pb-3.5 pt-4"
+                  style={{ background: d.bg, fontFamily: d.font }}
                 >
-                  Aa
-                </span>
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-medium text-ink">
-                  {d.name}
-                </span>
-                {design === d.id ? (
-                  <span className="block text-[11px] text-taupe-600">{"Ausgew\u00E4hlt"}</span>
-                ) : null}
-              </span>
-            </button>
-          ))}
+                  <span
+                    className="mx-auto mb-2 block h-9 w-9 rounded-full"
+                    style={{ background: d.akzent, opacity: 0.9 }}
+                  />
+                  <div
+                    className="text-center leading-tight"
+                    style={{ color: d.ink, fontWeight: 600, fontSize: 14 }}
+                  >
+                    Dein Titel
+                  </div>
+                  <div
+                    className="mb-2.5 text-center"
+                    style={{ color: d.muted, fontSize: 9 }}
+                  >
+                    Kurzer Untertitel
+                  </div>
+                  <span
+                    className="mx-auto flex h-[18px] w-[85%] items-center justify-center"
+                    style={{
+                      background: d.akzent,
+                      color: d.akzentInk,
+                      borderRadius: d.radius,
+                      fontSize: 8,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Knopf
+                  </span>
+                  <span
+                    className="mx-auto mt-1.5 block h-[18px] w-[85%]"
+                    style={{
+                      background: d.akzent,
+                      opacity: 0.75,
+                      borderRadius: d.radius,
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-1 px-2.5 py-2">
+                  <span className="truncate text-[12px] font-medium text-ink">
+                    {d.name}
+                  </span>
+                  {aktiv ? (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-taupe-600" />
+                  ) : null}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
@@ -785,7 +1099,7 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
           className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14.5px] outline-none focus:border-taupe-400"
         >
           <option value="">Keine Kategorie</option>
-          {alleKategorien.map((k) => (
+          {kategorien.map((k) => (
             <option key={k.slug} value={k.slug}>
               {k.parent ? "\u00A0\u00A0\u00A0\u2014 " : ""}
               {k.title}
@@ -1000,6 +1314,7 @@ function DateiVerwaltung({
   abmelden: () => void;
 }) {
   const api = useApi(token, abmelden);
+  const { alle: kategorien, finde: kategorieFinden } = useKategorien();
   const [dateien, setDateien] = useState<DateiInfo[]>([]);
   const [laedt, setLaedt] = useState(true);
   const [art, setArt] = useState<"datei" | "youtube" | "link">("datei");
@@ -1202,7 +1517,7 @@ function DateiVerwaltung({
           className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14.5px] outline-none focus:border-taupe-400"
         >
           <option value="">Keine Kategorie</option>
-          {alleKategorien.map((k) => (
+          {kategorien.map((k) => (
             <option key={k.slug} value={k.slug}>
               {k.parent ? "\u00A0\u00A0\u00A0\u2014 " : ""}
               {k.title}
@@ -1331,7 +1646,7 @@ function DateiVerwaltung({
             <option value="">Alle Kategorien</option>
             {bereicheMitDateien.map((b) => (
               <option key={b} value={b}>
-                {getCategory(b)?.title || "Ohne Kategorie"}
+                {kategorieFinden(b)?.title || "Ohne Kategorie"}
               </option>
             ))}
           </select>
@@ -1352,49 +1667,285 @@ function DateiVerwaltung({
           {gefiltert.map((d) => (
             <div
               key={d.id}
+              className="rounded-xl border border-greige-200 bg-white p-3"
+            >
+              <div className="flex items-center gap-3">
+                <a
+                  href={d.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-greige-100 text-taupe-600"
+                >
+                  {d.vorschauUrl ? (
+                    <img src={d.vorschauUrl} alt="" className="h-full w-full object-cover" />
+                  ) : d.art === "youtube" ? (
+                    <Video className="h-5 w-5" />
+                  ) : d.art === "link" ? (
+                    <ExternalLink className="h-5 w-5" />
+                  ) : (
+                    <FileText className="h-5 w-5" />
+                  )}
+                  {d.art === "youtube" ? (
+                    <span className="absolute inset-0 flex items-center justify-center">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
+                        <Video className="h-3.5 w-3.5" />
+                      </span>
+                    </span>
+                  ) : null}
+                </a>
+                <div className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-semibold text-ink">
+                    {d.titel}
+                  </span>
+                  <span className="block truncate text-[12px] text-ink-mute">
+                    {kategorieFinden(d.bereich)?.title || "Ohne Kategorie"}
+                    {" \u00B7 "}
+                    {d.art === "youtube"
+                      ? "YouTube"
+                      : d.art === "link"
+                      ? "Link"
+                      : groesseText(d.groesse)}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loeschen(d.id)}
+                  aria-label="Eintrag loeschen"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-2.5">
+                <KundenTeilen
+                  url={d.url.startsWith("http") ? d.url : window.location.origin + d.url}
+                  title={d.titel}
+                  text={d.titel}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Kategorie-Verwaltung ---------- */
+
+const ICON_AUSWAHL = [
+  "Sparkles", "Heart", "ShoppingBag", "ChefHat", "BookOpen", "Newspaper",
+  "CalendarDays", "Leaf", "Pizza", "GraduationCap", "Megaphone", "Send",
+];
+
+interface EigeneKat {
+  slug: string;
+  title: string;
+  icon?: string;
+  parent?: string;
+}
+
+function KategorieVerwaltung({
+  token,
+  abmelden,
+}: {
+  token: string;
+  abmelden: () => void;
+}) {
+  const api = useApi(token, abmelden);
+  const { haupt } = useKategorien();
+  const [eigene, setEigene] = useState<EigeneKat[]>([]);
+  const [laedt, setLaedt] = useState(true);
+  const [titel, setTitel] = useState("");
+  const [icon, setIcon] = useState("Sparkles");
+  const [parent, setParent] = useState("");
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState("");
+
+  const laden = useCallback(async () => {
+    setLaedt(true);
+    setFehler("");
+    try {
+      const d = await api("kategorien");
+      setEigene(d.kategorien || []);
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler beim Laden.");
+    } finally {
+      setLaedt(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    laden();
+  }, [laden]);
+
+  const anlegen = async () => {
+    if (!titel.trim()) {
+      setFehler("Bitte einen Namen eingeben.");
+      return;
+    }
+    setLaeuft(true);
+    setFehler("");
+    try {
+      await api("kategorien", {
+        method: "POST",
+        body: JSON.stringify({ titel: titel.trim(), icon, parent }),
+      });
+      setTitel("");
+      setParent("");
+      await laden();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Anlegen fehlgeschlagen.");
+    } finally {
+      setLaeuft(false);
+    }
+  };
+
+  const loeschen = async (slug: string) => {
+    if (
+      !window.confirm(
+        "Diese Kategorie wirklich loeschen? Eigene Unterkategorien werden mit entfernt."
+      )
+    )
+      return;
+    setFehler("");
+    try {
+      await api("kategorien?slug=" + encodeURIComponent(slug), { method: "DELETE" });
+      setEigene((l) => l.filter((k) => k.slug !== slug && k.parent !== slug));
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Loeschen fehlgeschlagen.");
+    }
+  };
+
+  const parentTitel = (slug?: string) =>
+    slug ? haupt.find((h) => h.slug === slug)?.title || slug : "";
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 pb-16 pt-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="serif text-[22px] font-semibold text-ink">Kategorien</h1>
+        <button
+          type="button"
+          onClick={abmelden}
+          className="flex h-10 shrink-0 items-center gap-1.5 rounded-lg border border-greige-200 bg-white px-3 text-[13px] font-medium text-ink-soft transition hover:bg-greige-100"
+        >
+          <LogOut className="h-4 w-4" />
+          Abmelden
+        </button>
+      </div>
+
+      <div className="mb-5 rounded-xl border border-greige-200 bg-white p-4">
+        <h2 className="mb-3 text-[16px] font-semibold text-ink">
+          Neue Kategorie
+        </h2>
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          Name
+        </label>
+        <input
+          value={titel}
+          onChange={(e) => setTitel(e.target.value)}
+          placeholder="z. B. Weihnachtsaktionen"
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        />
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          Symbol
+        </label>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {ICON_AUSWAHL.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setIcon(name)}
+              className={
+                "flex h-10 w-10 items-center justify-center rounded-lg border transition " +
+                (icon === name
+                  ? "border-taupe-500 bg-taupe-50 text-taupe-700 ring-1 ring-taupe-400"
+                  : "border-greige-200 text-ink-soft hover:bg-greige-100")
+              }
+            >
+              <CategoryIcon name={name} className="h-5 w-5" />
+            </button>
+          ))}
+        </div>
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          {"Geh\u00F6rt zu"}
+        </label>
+        <select
+          value={parent}
+          onChange={(e) => setParent(e.target.value)}
+          className="mb-4 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[14.5px] outline-none focus:border-taupe-400"
+        >
+          <option value="">Eigene Hauptkategorie</option>
+          {haupt.map((h) => (
+            <option key={h.slug} value={h.slug}>
+              {"Unterkategorie von: " + h.title}
+            </option>
+          ))}
+        </select>
+
+        {fehler ? (
+          <p className="mb-3 rounded-md border border-greige-200 bg-offwhite px-3 py-2 text-[13px] text-ink-soft">
+            {fehler}
+          </p>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={anlegen}
+          disabled={laeuft || !titel.trim()}
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600 disabled:opacity-50"
+        >
+          {laeuft ? (
+            <Loader2 className="h-[18px] w-[18px] animate-spin" />
+          ) : (
+            <Plus className="h-[18px] w-[18px]" />
+          )}
+          Kategorie anlegen
+        </button>
+      </div>
+
+      <h2 className="mb-3 text-[15px] font-semibold text-ink">
+        Eigene Kategorien
+      </h2>
+      {laedt ? (
+        <div className="flex items-center justify-center gap-2 py-8 text-ink-mute">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Wird geladen ...
+        </div>
+      ) : eigene.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-greige-300 px-6 py-10 text-center text-[13.5px] text-ink-mute">
+          Noch keine eigenen Kategorien. Die eingebauten Kategorien bleiben
+          erhalten und lassen sich nicht loeschen.
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {eigene.map((k) => (
+            <div
+              key={k.slug}
               className="flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3"
             >
-              <a
-                href={d.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-greige-100 text-taupe-600"
-              >
-                {d.vorschauUrl ? (
-                  <img src={d.vorschauUrl} alt="" className="h-full w-full object-cover" />
-                ) : d.art === "youtube" ? (
-                  <Video className="h-5 w-5" />
-                ) : d.art === "link" ? (
-                  <ExternalLink className="h-5 w-5" />
-                ) : (
-                  <FileText className="h-5 w-5" />
-                )}
-                {d.art === "youtube" ? (
-                  <span className="absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white">
-                      <Video className="h-3.5 w-3.5" />
-                    </span>
-                  </span>
-                ) : null}
-              </a>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+                <CategoryIcon name={k.icon || "Folder"} className="h-5 w-5" />
+              </span>
               <div className="min-w-0 flex-1">
                 <span className="block truncate text-[14px] font-semibold text-ink">
-                  {d.titel}
+                  {k.title}
                 </span>
-                <span className="block truncate text-[12px] text-ink-mute">
-                  {getCategory(d.bereich)?.title || "Ohne Kategorie"}
-                  {" \u00B7 "}
-                  {d.art === "youtube"
-                    ? "YouTube"
-                    : d.art === "link"
-                    ? "Link"
-                    : groesseText(d.groesse)}
-                </span>
+                {k.parent ? (
+                  <span className="block truncate text-[12px] text-ink-mute">
+                    {parentTitel(k.parent)}
+                  </span>
+                ) : (
+                  <span className="block text-[12px] text-ink-mute">Hauptkategorie</span>
+                )}
               </div>
               <button
                 type="button"
-                onClick={() => loeschen(d.id)}
-                aria-label="Eintrag loeschen"
+                onClick={() => loeschen(k.slug)}
+                aria-label="Kategorie loeschen"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
               >
                 <Trash2 className="h-4 w-4" />
@@ -1436,7 +1987,9 @@ export default function AdminPage() {
     setToken(null);
   }, []);
 
-  const [reiter, setReiter] = useState<"seiten" | "dateien">("seiten");
+  const [reiter, setReiter] = useState<"seiten" | "dateien" | "kategorien">(
+    "seiten"
+  );
 
   if (!token) return <Anmeldung onToken={merken} />;
   return (
@@ -1468,11 +2021,26 @@ export default function AdminPage() {
           <Upload className="h-4 w-4" />
           Dateien
         </button>
+        <button
+          type="button"
+          onClick={() => setReiter("kategorien")}
+          className={
+            "flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-[14px] font-medium transition " +
+            (reiter === "kategorien"
+              ? "bg-taupe-500 text-offwhite"
+              : "border border-greige-200 bg-white text-ink-soft hover:bg-greige-100")
+          }
+        >
+          <Tags className="h-4 w-4" />
+          Kategorien
+        </button>
       </div>
       {reiter === "seiten" ? (
         <Baukasten token={token} abmelden={abmelden} />
-      ) : (
+      ) : reiter === "dateien" ? (
         <DateiVerwaltung token={token} abmelden={abmelden} />
+      ) : (
+        <KategorieVerwaltung token={token} abmelden={abmelden} />
       )}
     </div>
   );

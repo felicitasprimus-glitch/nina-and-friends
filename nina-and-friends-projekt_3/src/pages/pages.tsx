@@ -21,6 +21,7 @@ import {
   ContentCard,
   CopyButton,
   CustomerShareButton,
+  KundenTeilen,
   EmptyState,
   FavoriteButton,
   PhotoPlaceholder,
@@ -33,8 +34,8 @@ import {
   T,
   categories,
   getCategory,
-  getUnterkategorien,
 } from "../data/content";
+import { useKategorien } from "../hooks/useKategorien";
 import {
   useContent,
   useContentById,
@@ -51,12 +52,13 @@ import { useDateienImBereich } from "../hooks/useDateien";
 
 export function CategoryPage() {
   const { slug = "" } = useParams();
-  const category = getCategory(slug);
+  const { finde, unter } = useKategorien();
+  const category = finde(slug);
   const allItems = useContentsByCategory(slug);
   const upcoming = useUpcomingByCategory(slug);
   const { seiten } = useSeitenImBereich(slug);
   const { dateien } = useDateienImBereich(slug);
-  const unterkategorien = getUnterkategorien(slug);
+  const unterkategorien = unter(slug);
   const upcomingIds = new Set(upcoming.map((u) => u.id));
   const rest = allItems.filter((i) => !upcomingIds.has(i.id));
   const ready = useDelayedReady();
@@ -150,66 +152,81 @@ export function CategoryPage() {
               <h2 className="mb-3 text-[15px] font-semibold text-ink">Dateien</h2>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {dateien.map((d) => (
-                  <a
+                  <div
                     key={d.id}
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group overflow-hidden rounded-xl border border-greige-200 bg-white transition hover:border-taupe-300"
+                    className="overflow-hidden rounded-xl border border-greige-200 bg-white"
                   >
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-greige-100">
-                      {d.vorschauUrl ? (
-                        <img
-                          src={d.vorschauUrl}
-                          alt=""
-                          loading="lazy"
-                          className="h-full w-full object-cover transition group-hover:scale-[1.03]"
-                        />
-                      ) : d.art === "youtube" ? (
-                        <span className="flex h-full w-full items-center justify-center text-taupe-500">
-                          <Play className="h-8 w-8" />
-                        </span>
-                      ) : d.art === "link" ? (
-                        <span className="flex h-full w-full items-center justify-center text-taupe-500">
-                          <ExternalLink className="h-8 w-8" />
-                        </span>
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center text-taupe-500">
-                          <FileText className="h-8 w-8" />
-                        </span>
-                      )}
-                      {d.art === "youtube" ? (
-                        <span className="absolute inset-0 flex items-center justify-center">
-                          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white">
-                            <Play className="h-5 w-5" />
+                    <a
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group block"
+                    >
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-greige-100">
+                        {d.vorschauUrl ? (
+                          <img
+                            src={d.vorschauUrl}
+                            alt=""
+                            loading="lazy"
+                            className="h-full w-full object-cover transition group-hover:scale-[1.03]"
+                          />
+                        ) : d.art === "youtube" ? (
+                          <span className="flex h-full w-full items-center justify-center text-taupe-500">
+                            <Play className="h-8 w-8" />
                           </span>
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="p-3">
-                      <span className="block truncate text-[13.5px] font-semibold text-ink">
-                        {d.titel}
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-1 text-[11.5px] text-ink-mute">
-                        {d.art === "youtube" ? (
-                          <>
-                            <Play className="h-3.5 w-3.5" />
-                            Video ansehen
-                          </>
                         ) : d.art === "link" ? (
-                          <>
-                            <ExternalLink className="h-3.5 w-3.5" />
-                            {"\u00D6ffnen"}
-                          </>
+                          <span className="flex h-full w-full items-center justify-center text-taupe-500">
+                            <ExternalLink className="h-8 w-8" />
+                          </span>
                         ) : (
-                          <>
-                            <Download className="h-3.5 w-3.5" />
-                            {(d.istBild ? "Bild" : "Datei") + " \u00F6ffnen"}
-                          </>
+                          <span className="flex h-full w-full items-center justify-center text-taupe-500">
+                            <FileText className="h-8 w-8" />
+                          </span>
                         )}
-                      </span>
+                        {d.art === "youtube" ? (
+                          <span className="absolute inset-0 flex items-center justify-center">
+                            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white">
+                              <Play className="h-5 w-5" />
+                            </span>
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="px-3 pt-3">
+                        <span className="block truncate text-[13.5px] font-semibold text-ink">
+                          {d.titel}
+                        </span>
+                        <span className="mt-0.5 flex items-center gap-1 text-[11.5px] text-ink-mute">
+                          {d.art === "youtube" ? (
+                            <>
+                              <Play className="h-3.5 w-3.5" />
+                              Video ansehen
+                            </>
+                          ) : d.art === "link" ? (
+                            <>
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              {"\u00D6ffnen"}
+                            </>
+                          ) : (
+                            <>
+                              <Download className="h-3.5 w-3.5" />
+                              {(d.istBild ? "Bild" : "Datei") + " \u00F6ffnen"}
+                            </>
+                          )}
+                        </span>
+                      </div>
+                    </a>
+                    <div className="px-3 pb-3 pt-2">
+                      <KundenTeilen
+                        url={
+                          d.url.startsWith("http")
+                            ? d.url
+                            : window.location.origin + d.url
+                        }
+                        title={d.titel}
+                        text={d.titel}
+                      />
                     </div>
-                  </a>
+                  </div>
                 ))}
               </div>
             </section>
