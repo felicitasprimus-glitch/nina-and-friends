@@ -1,5 +1,5 @@
 // Einfacher Service Worker fuer Installierbarkeit und Offline-Grundfunktion.
-const CACHE = "naf-v1";
+const CACHE = "naf-v2";
 const CORE = ["/", "/index.html", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
