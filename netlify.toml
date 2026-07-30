@@ -1,0 +1,55 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Admin-Schnittstelle (Anmeldung, Speichern, Upload)
+[[redirects]]
+  from = "/api/admin/*"
+  to = "/.netlify/functions/admin"
+  status = 200
+
+# Seiten fuer die App (Lesezugriff)
+[[redirects]]
+  from = "/api/seiten"
+  to = "/.netlify/functions/seiten"
+  status = 200
+
+# Push-Abos entgegennehmen
+[[redirects]]
+  from = "/api/push/*"
+  to = "/.netlify/functions/push"
+  status = 200
+
+# Hochgeladene Bilder/Dateien ausliefern
+[[redirects]]
+  from = "/api/medien/*"
+  to = "/.netlify/functions/medien"
+  status = 200
+
+# Kategorie-Dateien fuer die App (Lesezugriff)
+[[redirects]]
+  from = "/api/dateien"
+  to = "/.netlify/functions/dateien"
+  status = 200
+
+# Eigene Kategorien fuer die App (Lesezugriff)
+[[redirects]]
+  from = "/api/kategorien"
+  to = "/.netlify/functions/kategorien"
+  status = 200
+
+# Oeffentliche Kunden-Seiten (servergerendert, mit WhatsApp-Vorschau)
+[[redirects]]
+  from = "/s/*"
+  to = "/.netlify/functions/show"
+  status = 200
+
+# Alles andere: die App (Single Page App)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

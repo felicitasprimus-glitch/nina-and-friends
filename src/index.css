@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply text-ink font-sans antialiased;
+  background-color: #f6f2ec;
+  background-image: linear-gradient(180deg, #fbf9f5 0%, #f4efe7 46%, #efe8dd 100%);
+  background-attachment: fixed;
+}
+
+.serif {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+.script {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-style: italic;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
