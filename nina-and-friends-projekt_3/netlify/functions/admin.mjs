@@ -45,7 +45,7 @@ function dateiAusgabe(r) {
   let vorschauUrl = "";
   if (r.vorschauKey) vorschauUrl = "/api/medien/" + r.vorschauKey;
   else if (r.vorschauExtern) vorschauUrl = r.vorschauExtern;
-  else if (istBild) vorschauUrl = "/api/medien/" + r.medienKey;
+  else if (istBild) vorschauUrl = url;
   return {
     id: r.id,
     art,

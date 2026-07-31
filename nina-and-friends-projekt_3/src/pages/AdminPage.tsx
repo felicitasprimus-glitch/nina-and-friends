@@ -1327,6 +1327,66 @@ function istPdf(datei: File): boolean {
   );
 }
 
+function istVideo(datei: File): boolean {
+  return (
+    datei.type.startsWith("video/") ||
+    /\.(mp4|mov|m4v|webm|ogg|avi|mkv)$/i.test(datei.name)
+  );
+}
+
+// Aus einem Video ein Standbild (JPEG) als Vorschau erzeugen.
+function videoVorschauBase64(datei: File): Promise<string | null> {
+  return new Promise((loesen) => {
+    try {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      video.muted = true;
+      (video as HTMLVideoElement & { playsInline: boolean }).playsInline = true;
+      const url = URL.createObjectURL(datei);
+      let fertig = false;
+      const beenden = (wert: string | null) => {
+        if (fertig) return;
+        fertig = true;
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // egal
+        }
+        loesen(wert);
+      };
+      video.onloadeddata = () => {
+        try {
+          video.currentTime = Math.min(1, (video.duration || 2) / 2);
+        } catch {
+          beenden(null);
+        }
+      };
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const breite = video.videoWidth || 640;
+          const hoehe = video.videoHeight || 360;
+          const skala = Math.min(1, 900 / breite);
+          canvas.width = Math.round(breite * skala);
+          canvas.height = Math.round(hoehe * skala);
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return beenden(null);
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const daten = canvas.toDataURL("image/jpeg", 0.8);
+          beenden(daten.split(",")[1] || null);
+        } catch {
+          beenden(null);
+        }
+      };
+      video.onerror = () => beenden(null);
+      window.setTimeout(() => beenden(null), 8000);
+      video.src = url;
+    } catch {
+      loesen(null);
+    }
+  });
+}
+
 function groesseText(bytes: number): string {
   if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + " MB";
   return Math.max(1, Math.round(bytes / 1024)) + " KB";
@@ -1417,6 +1477,9 @@ function DateiVerwaltung({
           } else if (istPdf(datei)) {
             const b64 = await pdfVorschauBase64(datei);
             if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
+          } else if (istVideo(datei)) {
+            const b64 = await videoVorschauBase64(datei);
+            if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
           }
           if (vorschauBlob) {
             const sigV = await api("signed-upload", {
@@ -1442,6 +1505,12 @@ function DateiVerwaltung({
             body.vorschauTyp = vorschau.type;
           } else if (istPdf(datei)) {
             const auto = await pdfVorschauBase64(datei);
+            if (auto) {
+              body.vorschau = auto;
+              body.vorschauTyp = "image/jpeg";
+            }
+          } else if (istVideo(datei)) {
+            const auto = await videoVorschauBase64(datei);
             if (auto) {
               body.vorschau = auto;
               body.vorschauTyp = "image/jpeg";

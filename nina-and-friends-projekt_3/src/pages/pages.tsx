@@ -50,6 +50,19 @@ import { useDateienImBereich } from "../hooks/useDateien";
 
 /* ---------- Kategorie-Unterseite ---------- */
 
+// Haengt an eine Datei-Adresse den Hinweis zum Herunterladen an
+function downloadLink(url: string, dateiname: string): string {
+  if (!url) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  if (url.includes("/storage/v1/object/public/")) {
+    return url + sep + "download=" + encodeURIComponent(dateiname || "datei");
+  }
+  if (url.includes("/api/medien/")) {
+    return url + sep + "download=1";
+  }
+  return url;
+}
+
 export function CategoryPage() {
   const { slug = "" } = useParams();
   const { finde, unter } = useKategorien();
@@ -183,7 +196,7 @@ export function CategoryPage() {
                             <FileText className="h-8 w-8" />
                           </span>
                         )}
-                        {d.art === "youtube" ? (
+                        {d.art === "youtube" || d.typ?.startsWith("video/") ? (
                           <span className="absolute inset-0 flex items-center justify-center">
                             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white">
                               <Play className="h-5 w-5" />
@@ -196,7 +209,7 @@ export function CategoryPage() {
                           {d.titel}
                         </span>
                         <span className="mt-0.5 flex items-center gap-1 text-[11.5px] text-ink-mute">
-                          {d.art === "youtube" ? (
+                          {d.art === "youtube" || d.typ?.startsWith("video/") ? (
                             <>
                               <Play className="h-3.5 w-3.5" />
                               Video ansehen
@@ -215,7 +228,22 @@ export function CategoryPage() {
                         </span>
                       </div>
                     </a>
-                    <div className="px-3 pb-3 pt-2">
+                    <div className="space-y-2 px-3 pb-3 pt-2">
+                      {d.art === "datei" ? (
+                        <a
+                          href={downloadLink(
+                            d.url.startsWith("http")
+                              ? d.url
+                              : window.location.origin + d.url,
+                            d.dateiname
+                          )}
+                          download={d.dateiname || undefined}
+                          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-greige-200 bg-white text-[12.5px] font-medium text-ink-soft transition hover:bg-greige-100"
+                        >
+                          <Download className="h-4 w-4" />
+                          Herunterladen
+                        </a>
+                      ) : null}
                       <KundenTeilen
                         url={
                           d.url.startsWith("http")
