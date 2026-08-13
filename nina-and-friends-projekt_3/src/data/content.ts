@@ -51,8 +51,8 @@ export const typeLabels: Record<ContentType, string> = {
 };
 
 export const categories: Category[] = [
-  { slug: "katalog-fs-26", title: "Katalog Fr\u00FChjahr/Sommer 26", icon: "BookOpen",
-    description: "Der aktuelle Katalog mit allen Produkten und Preisen der Saison." },
+  { slug: "katalog-fs-26", title: "Kataloge", icon: "BookOpen",
+    description: "Kataloge, Preislisten und Produktinfos der aktuellen Saison." },
   { slug: "zum-verschicken", title: "Zum Verschicken", icon: "Send",
     description: "Fertige Inhalte, die du direkt an Kundinnen weiterleiten kannst." },
   { slug: "willkommen", title: "Willkommen im Team", icon: "Heart",
@@ -159,7 +159,7 @@ export const unterKategorien: Category[] = [
 
   // --- Katalog Fruehjahr/Sommer 26 ---
   { slug: "kfs-kataloge", parent: "katalog-fs-26", icon: "Library",
-    title: "Kataloge", description: "Der Fr\u00FChjahr-/Sommerkatalog 2026 als PDF und Online-Version." },
+    title: "Fr\u00FChjahr/Sommer 2026", description: "Der Saisonkatalog als PDF und zum Online-Bl\u00E4ttern." },
   { slug: "kfs-preislisten", parent: "katalog-fs-26", icon: "ListChecks",
     title: "Preislisten", description: "Alle Preislisten zur Saison, auch die bebilderte Fassung." },
   { slug: "kfs-produktinfos", parent: "katalog-fs-26", icon: "Boxes",
