@@ -19,6 +19,7 @@ import {
   MessageCircle,
   Minus,
   MousePointerClick,
+  Pencil,
   Plus,
   Save,
   Tags,
@@ -31,6 +32,7 @@ import { useKategorien } from "../hooks/useKategorien";
 import { useDateien } from "../hooks/useDateien";
 import {
   hauptKategorien as eingebauteHaupt,
+  unterKategorien as eingebauteUnter,
   eingebauteDateien,
 } from "../data/content";
 import { CategoryIcon, KundenTeilen } from "../components/ui";
@@ -2024,6 +2026,7 @@ function KategorieVerwaltung({
   const [parent, setParent] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState("");
+  const [namen, setNamen] = useState<Record<string, string>>({});
 
   const laden = useCallback(async () => {
     setLaedt(true);
@@ -2033,6 +2036,8 @@ function KategorieVerwaltung({
       setEigene(d.kategorien || []);
       const v = await api("versteckt");
       setVersteckt(v.versteckt || []);
+      const n = await api("kategorienamen");
+      setNamen(n.namen || {});
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Fehler beim Laden.");
     } finally {
@@ -2043,6 +2048,45 @@ function KategorieVerwaltung({
   useEffect(() => {
     laden();
   }, [laden]);
+
+  // Kategorie umbenennen. Der Slug bleibt gleich, damit die
+  // zugeordneten Dateien erhalten bleiben.
+  const umbenennen = async (slug: string, bisher: string) => {
+    const neu = window.prompt("Neuer Name f\u00FCr die Kategorie:", bisher);
+    if (neu === null) return;
+    const wert = neu.trim();
+    if (!wert || wert === bisher) return;
+    setFehler("");
+    try {
+      await api("kategorienamen", {
+        method: "POST",
+        body: JSON.stringify({ slug, titel: wert }),
+      });
+      setNamen((n) => ({ ...n, [slug]: wert }));
+      setEigene((liste) =>
+        liste.map((k) => (k.slug === slug ? { ...k, title: wert } : k))
+      );
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Umbenennen fehlgeschlagen.");
+    }
+  };
+
+  // Wieder den Originalnamen aus dem Code verwenden
+  const nameZuruecksetzen = async (slug: string) => {
+    setFehler("");
+    try {
+      await api("kategorienamen?slug=" + encodeURIComponent(slug), {
+        method: "DELETE",
+      });
+      setNamen((n) => {
+        const kopie = { ...n };
+        delete kopie[slug];
+        return kopie;
+      });
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Zuruecksetzen fehlgeschlagen.");
+    }
+  };
 
   const anlegen = async () => {
     if (!titel.trim()) {
@@ -2131,6 +2175,75 @@ function KategorieVerwaltung({
   const verwaist = Array.from(anzahlJeBereich.keys()).filter(
     (slug) => !alleKats.some((k) => k.slug === slug)
   );
+
+  // Eine Zeile im Abschnitt "Eingebaute Kategorien"
+  const eingebauteZeile = (
+    slug: string,
+    originalTitel: string,
+    ikon: string,
+    eingerueckt: boolean
+  ) => {
+    const aus = versteckt.includes(slug);
+    const angezeigt = namen[slug] || originalTitel;
+    return (
+      <div
+        key={slug}
+        className={
+          "flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3 " +
+          (aus ? "opacity-60 " : "") +
+          (eingerueckt ? "ml-6" : "")
+        }
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+          <CategoryIcon name={ikon} className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <span className="block truncate text-[14px] font-medium text-ink">
+            {angezeigt}
+          </span>
+          {namen[slug] ? (
+            <button
+              type="button"
+              onClick={() => nameZuruecksetzen(slug)}
+              className="text-[11.5px] text-ink-mute underline decoration-dotted hover:text-ink"
+            >
+              {"umbenannt von \u201E" + originalTitel + "\u201C \u2013 zur\u00FCcksetzen"}
+            </button>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => umbenennen(slug, angezeigt)}
+          aria-label="Kategorie umbenennen"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => umschalten(slug, !aus)}
+          className={
+            "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition " +
+            (aus
+              ? "border-taupe-400 bg-taupe-50 text-taupe-700 hover:bg-taupe-100"
+              : "border-greige-200 text-ink-soft hover:bg-greige-100")
+          }
+        >
+          {aus ? (
+            <>
+              <Eye className="h-4 w-4" />
+              Einblenden
+            </>
+          ) : (
+            <>
+              <EyeOff className="h-4 w-4" />
+              Ausblenden
+            </>
+          )}
+        </button>
+      </div>
+    );
+  };
 
   const zeile = (
     slug: string,
@@ -2282,50 +2395,17 @@ function KategorieVerwaltung({
         Eingebaute Kategorien
       </h2>
       <p className="mb-3 text-[12.5px] text-ink-mute">
-        {"Diese kannst du ausblenden (dann verschwinden sie \u00FCberall) und jederzeit wieder einblenden."}
+        {"Umbenennen mit dem Stift, ausblenden mit dem Auge. Unterordner stehen eingerueckt darunter."}
       </p>
       <div className="mb-6 space-y-2">
-        {eingebauteHaupt.map((k) => {
-          const aus = versteckt.includes(k.slug);
-          return (
-            <div
-              key={k.slug}
-              className={
-                "flex items-center gap-3 rounded-xl border bg-white p-3 " +
-                (aus ? "border-greige-200 opacity-60" : "border-greige-200")
-              }
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
-                <CategoryIcon name={k.icon} className="h-5 w-5" />
-              </span>
-              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
-                {k.title}
-              </span>
-              <button
-                type="button"
-                onClick={() => umschalten(k.slug, !aus)}
-                className={
-                  "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition " +
-                  (aus
-                    ? "border-taupe-400 bg-taupe-50 text-taupe-700 hover:bg-taupe-100"
-                    : "border-greige-200 text-ink-soft hover:bg-greige-100")
-                }
-              >
-                {aus ? (
-                  <>
-                    <Eye className="h-4 w-4" />
-                    Einblenden
-                  </>
-                ) : (
-                  <>
-                    <EyeOff className="h-4 w-4" />
-                    Ausblenden
-                  </>
-                )}
-              </button>
-            </div>
-          );
-        })}
+        {eingebauteHaupt.map((k) => (
+          <div key={k.slug} className="space-y-2">
+            {eingebauteZeile(k.slug, k.title, k.icon, false)}
+            {eingebauteUnter
+              .filter((u) => u.parent === k.slug)
+              .map((u) => eingebauteZeile(u.slug, u.title, u.icon, true))}
+          </div>
+        ))}
       </div>
 
       <h2 className="mb-3 text-[15px] font-semibold text-ink">
@@ -2363,6 +2443,14 @@ function KategorieVerwaltung({
                   <span className="block text-[12px] text-ink-mute">Hauptkategorie</span>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => umbenennen(k.slug, namen[k.slug] || k.title)}
+                aria-label="Kategorie umbenennen"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => loeschen(k.slug)}
@@ -2424,7 +2512,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: KATEGORIE-DATEIEN
+        Stand: KATEGORIEN-SOFORT
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
