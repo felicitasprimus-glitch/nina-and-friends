@@ -33,7 +33,7 @@ export function useDateien() {
   useEffect(() => {
     let aktiv = true;
     const laden = () => {
-      fetch("/api/dateien")
+      fetch("/api/dateien", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           if (!aktiv) return;
