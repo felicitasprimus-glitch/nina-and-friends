@@ -14,15 +14,17 @@ interface EigeneKategorie {
 
 let zwischenspeicher: Category[] | null = null;
 let verstecktCache: string[] = [];
+let namenCache: Record<string, string> = {};
 
 export function useKategorien() {
   const [eigene, setEigene] = useState<Category[]>(zwischenspeicher || []);
   const [versteckt, setVersteckt] = useState<string[]>(verstecktCache);
+  const [namen, setNamen] = useState<Record<string, string>>(namenCache);
 
   useEffect(() => {
     let aktiv = true;
     const laden = () => {
-      fetch("/api/kategorien")
+      fetch("/api/kategorien", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => {
           if (!aktiv) return;
@@ -37,8 +39,10 @@ export function useKategorien() {
           );
           zwischenspeicher = liste;
           verstecktCache = d.versteckt || [];
+          namenCache = d.namen || {};
           setEigene(liste);
           setVersteckt(d.versteckt || []);
+          setNamen(d.namen || {});
         })
         .catch(() => {});
     };
@@ -62,13 +66,21 @@ export function useKategorien() {
   }, []);
 
   const sichtbar = (k: Category) => !versteckt.includes(k.slug);
-  const alle: Category[] = [...eingebautAlle, ...eigene].filter(sichtbar);
+  // Im Admin vergebene Namen gehen vor
+  const umbenannt = (k: Category): Category =>
+    namen[k.slug] ? { ...k, title: namen[k.slug] } : k;
+
+  const alle: Category[] = [...eingebautAlle, ...eigene]
+    .filter(sichtbar)
+    .map(umbenannt);
   const haupt: Category[] = [
     ...eingebautHaupt,
     ...eigene.filter((k) => !k.parent),
-  ].filter(sichtbar);
+  ]
+    .filter(sichtbar)
+    .map(umbenannt);
   const finde = (slug: string) => alle.find((c) => c.slug === slug);
   const unter = (slug: string) => alle.filter((c) => c.parent === slug);
 
-  return { alle, haupt, eigene, versteckt, finde, unter };
+  return { alle, haupt, eigene, versteckt, namen, finde, unter };
 }
