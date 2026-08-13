@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   Check,
+  ChevronRight,
   Clock,
   Copy,
   ExternalLink,
@@ -27,7 +28,11 @@ import {
   Video,
 } from "lucide-react";
 import { useKategorien } from "../hooks/useKategorien";
-import { hauptKategorien as eingebauteHaupt } from "../data/content";
+import { useDateien } from "../hooks/useDateien";
+import {
+  hauptKategorien as eingebauteHaupt,
+  eingebauteDateien,
+} from "../data/content";
 import { CategoryIcon, KundenTeilen } from "../components/ui";
 import { supabaseAktiv, supabaseUploadSigniert, base64ZuBlob } from "../lib/supabase";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -529,6 +534,129 @@ const VORLAGEN = [
   { id: "produkt", kategorie: "verkostungen", design: "blush", emoji: "\u2728", name: "Produkt-Highlight", haupt: "Produkt-Highlight", akzent: "Live erleben", badge: "PRODUKT-HIGHLIGHT", untertitel: "Live erleben", beschreibung: "Erlebe unsere Produkte live und lass dich begeistern.", dauer: "ca. 2 Stunden" },
 ];
 
+function VorschauBaustein({
+  b,
+  d,
+}: {
+  b: Baustein;
+  d: (typeof DESIGNS)[number];
+}) {
+  const typ = (b.typ || "Text").toLowerCase();
+
+  if (typ === "ueberschrift") {
+    return b.text ? (
+      <div style={{ color: d.ink, fontFamily: d.font, fontWeight: 600, fontSize: 20, marginTop: 12, lineHeight: 1.2 }}>
+        {b.text}
+      </div>
+    ) : null;
+  }
+  if (typ === "trenner") {
+    return <div style={{ borderTop: "1px solid rgba(0,0,0,.1)", margin: "14px 0" }} />;
+  }
+  if (typ === "bild") {
+    return b.medienUrl ? (
+      <img src={b.medienUrl} alt="" style={{ width: "100%", borderRadius: 12, display: "block", marginTop: 10 }} />
+    ) : null;
+  }
+  if (typ === "video") {
+    return (
+      <div style={{ marginTop: 10, borderRadius: 12, background: "rgba(0,0,0,.06)", padding: "24px 12px", textAlign: "center", color: d.muted, fontSize: 13 }}>
+        {"\u25B6  Video"}
+      </div>
+    );
+  }
+  if (typ === "datei") {
+    return (
+      <div style={{ marginTop: 10, borderRadius: d.radius, border: "1px solid rgba(0,0,0,.12)", padding: "11px 14px", fontSize: 13.5, color: d.ink }}>
+        {b.medienName || b.knopftext || "Datei"}
+      </div>
+    );
+  }
+  if (typ === "knopf" || typ === "link") {
+    return b.knopftext ? (
+      <div style={{ marginTop: 12, background: d.akzent, color: d.akzentInk, borderRadius: d.radius, padding: "12px 16px", textAlign: "center", fontWeight: 600, fontSize: 14 }}>
+        {b.knopftext}
+      </div>
+    ) : null;
+  }
+  if (typ === "profil") {
+    const p = profilLesen(b.text);
+    const pd = PROFIL_DESIGNS.find((x) => x.id === (p.design || "warm")) || PROFIL_DESIGNS[0];
+    const knoepfe = [
+      p.whatsapp && "WhatsApp",
+      p.instagram && "Instagram",
+      p.shop && "Zum Shop",
+      p.email && "E-Mail",
+      p.telefon && "Anrufen",
+      p.website && "Website",
+    ].filter(Boolean) as string[];
+    return (
+      <div style={{ marginTop: 12, background: pd.bg, border: "1px solid rgba(0,0,0,.08)", borderRadius: 16, padding: "20px 16px", textAlign: "center" }}>
+        {b.medienUrl ? (
+          <img src={b.medienUrl} alt="" style={{ width: 72, height: 72, borderRadius: 999, objectFit: "cover", margin: "0 auto 8px", display: "block" }} />
+        ) : null}
+        <div style={{ fontFamily: d.font, fontWeight: 600, fontSize: 18, color: "#2E2B26" }}>{p.name || "Name"}</div>
+        {p.rolle ? <div style={{ fontSize: 13, color: pd.akzent, marginTop: 2 }}>{p.rolle}</div> : null}
+        <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+          {knoepfe.map((k, i) => (
+            <div key={i} style={{ background: pd.akzent, color: "#fff", borderRadius: 999, padding: "9px 12px", fontSize: 12.5, fontWeight: 600 }}>
+              {k}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Text
+  if (!b.text) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      {b.text.split(/\n{2,}/).map((abs, i) => (
+        <p key={i} style={{ color: d.muted, fontSize: 14.5, lineHeight: 1.55, whiteSpace: "pre-line", margin: i > 0 ? "8px 0 0" : "6px 0 0" }}>
+          {abs}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function SeitenVorschau({
+  titel,
+  untertitel,
+  design,
+  bausteine,
+}: {
+  titel: string;
+  untertitel: string;
+  design: string;
+  bausteine: Baustein[];
+}) {
+  const d = DESIGNS.find((x) => x.id === design) || DESIGNS[0];
+  const sichtbar = bausteine.filter((b) => b.aktiv !== false);
+  return (
+    <div className="overflow-hidden rounded-2xl border border-greige-200">
+      <div style={{ background: d.bg, padding: "24px 20px" }}>
+        {titel ? (
+          <div style={{ color: d.ink, fontFamily: d.font, fontWeight: 600, fontSize: 26, lineHeight: 1.15, textAlign: "center" }}>
+            {titel}
+          </div>
+        ) : null}
+        {untertitel ? (
+          <div style={{ color: d.muted, fontSize: 14.5, textAlign: "center", marginTop: 5 }}>
+            {untertitel}
+          </div>
+        ) : null}
+        <div>
+          {sichtbar.map((b) => (
+            <VorschauBaustein key={b.id} b={b} d={d} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Baukasten({ token, abmelden }: { token: string; abmelden: () => void }) {
   const api = useApi(token, abmelden);
 
@@ -546,6 +674,7 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
   const [fehler, setFehler] = useState("");
   const [kopiert, setKopiert] = useState(false);
   const [vorlageFilter, setVorlageFilter] = useState("alle");
+  const [vorschauOffen, setVorschauOffen] = useState(true);
   const { alle: kategorien, finde: kategorieFinden } = useKategorien();
 
   const seitenLaden = useCallback(async () => {
@@ -1201,6 +1330,32 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
         </div>
       ) : (
         <div className="space-y-3">
+          <div className="mb-1 flex items-center justify-between">
+            <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-soft">
+              <Eye className="h-4 w-4" />
+              Live-Vorschau
+            </h3>
+            <button
+              type="button"
+              onClick={() => setVorschauOffen((o) => !o)}
+              className="text-[12.5px] font-medium text-taupe-600 transition hover:text-taupe-700"
+            >
+              {vorschauOffen ? "ausblenden" : "anzeigen"}
+            </button>
+          </div>
+          {vorschauOffen ? (
+            <div className="mb-2">
+              <SeitenVorschau
+                titel={titel}
+                untertitel={untertitel}
+                design={design}
+                bausteine={bausteine}
+              />
+              <p className="mt-1.5 text-center text-[11px] text-ink-mute">
+                {"So sieht deine Seite aus \u2013 sie aktualisiert sich beim Tippen."}
+              </p>
+            </div>
+          ) : null}
           {bausteine.map((b, i) => (
             <BausteinKarte
               key={b.id}
@@ -1395,9 +1550,11 @@ function groesseText(bytes: number): string {
 function DateiVerwaltung({
   token,
   abmelden,
+  startFilter = "",
 }: {
   token: string;
   abmelden: () => void;
+  startFilter?: string;
 }) {
   const api = useApi(token, abmelden);
   const { alle: kategorien, finde: kategorieFinden } = useKategorien();
@@ -1412,7 +1569,12 @@ function DateiVerwaltung({
   const [linkUrl, setLinkUrl] = useState("");
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState("");
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(startFilter);
+
+  // Wenn aus dem Kategorien-Reiter eine Kategorie geoeffnet wird
+  useEffect(() => {
+    setFilter(startFilter);
+  }, [startFilter]);
 
   const laden = useCallback(async () => {
     setLaedt(true);
@@ -1557,7 +1719,9 @@ function DateiVerwaltung({
     }
   };
 
-  const bereicheMitDateien = Array.from(new Set(dateien.map((d) => d.bereich)));
+  const bereicheMitDateien = Array.from(
+    new Set([...dateien.map((d) => d.bereich), ...(filter ? [filter] : [])])
+  );
   const gefiltert = filter ? dateien.filter((d) => d.bereich === filter) : dateien;
 
   const artKnopf = (wert: "datei" | "youtube" | "link", label: string) => (
@@ -1732,7 +1896,7 @@ function DateiVerwaltung({
 
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-ink">{"Eintr\u00E4ge"}</h2>
-        {bereicheMitDateien.length > 1 ? (
+        {bereicheMitDateien.length > 0 ? (
           <select
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -1843,12 +2007,15 @@ interface EigeneKat {
 function KategorieVerwaltung({
   token,
   abmelden,
+  oeffneDateien,
 }: {
   token: string;
   abmelden: () => void;
+  oeffneDateien: (slug: string) => void;
 }) {
   const api = useApi(token, abmelden);
-  const { haupt } = useKategorien();
+  const { haupt, alle: alleKats, unter } = useKategorien();
+  const { dateien: alleDateien } = useDateien();
   const [eigene, setEigene] = useState<EigeneKat[]>([]);
   const [versteckt, setVersteckt] = useState<string[]>([]);
   const [laedt, setLaedt] = useState(true);
@@ -1941,6 +2108,61 @@ function KategorieVerwaltung({
   const parentTitel = (slug?: string) =>
     slug ? haupt.find((h) => h.slug === slug)?.title || slug : "";
 
+  // Anzahl der Dateien je Kategorie. Die fest im Code hinterlegten
+  // Eintraege bleiben aussen vor, sie lassen sich hier nicht loeschen.
+  const festeIds = new Set(eingebauteDateien.map((d) => d.id));
+  const anzahlJeBereich = new Map<string, number>();
+  alleDateien.forEach((d) => {
+    if (!d.bereich || festeIds.has(d.id)) return;
+    anzahlJeBereich.set(d.bereich, (anzahlJeBereich.get(d.bereich) || 0) + 1);
+  });
+  const anzahl = (slug: string) => anzahlJeBereich.get(slug) || 0;
+
+  // Hauptkategorien mit ihren Unterkategorien, aber nur was Dateien enthaelt
+  const baum = haupt
+    .map((h) => ({
+      kat: h,
+      kinder: unter(h.slug).filter((k) => anzahl(k.slug) > 0),
+      eigene: anzahl(h.slug),
+    }))
+    .filter((z) => z.eigene > 0 || z.kinder.length > 0);
+
+  // Dateien in Kategorien, die es nicht mehr gibt
+  const verwaist = Array.from(anzahlJeBereich.keys()).filter(
+    (slug) => !alleKats.some((k) => k.slug === slug)
+  );
+
+  const zeile = (
+    slug: string,
+    title: string,
+    icon: string,
+    n: number,
+    eingerueckt: boolean
+  ) => (
+    <button
+      key={slug}
+      type="button"
+      onClick={() => oeffneDateien(slug)}
+      className={
+        "flex w-full items-center gap-3 rounded-xl border border-greige-200 bg-white p-3 text-left transition hover:border-taupe-300 hover:bg-greige-100 " +
+        (eingerueckt ? "ml-6 w-[calc(100%-1.5rem)]" : "")
+      }
+    >
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+        <CategoryIcon name={icon || "Folder"} className="h-5 w-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[14px] font-medium text-ink">
+          {title}
+        </span>
+        <span className="block text-[12px] text-ink-mute">
+          {n === 1 ? "1 Eintrag" : n + " Eintr\u00E4ge"}
+        </span>
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-ink-mute" />
+    </button>
+  );
+
   return (
     <div className="mx-auto max-w-2xl px-4 pb-16 pt-4">
       <div className="mb-4 flex items-center justify-between">
@@ -2027,6 +2249,34 @@ function KategorieVerwaltung({
           Kategorie anlegen
         </button>
       </div>
+
+      <h2 className="mb-2 text-[15px] font-semibold text-ink">
+        {"Dateien nach Kategorie"}
+      </h2>
+      <p className="mb-3 text-[12.5px] text-ink-mute">
+        {"Tippe auf eine Kategorie, um ihre Eintr\u00E4ge zu sehen und zu l\u00F6schen."}
+      </p>
+      {baum.length === 0 && verwaist.length === 0 ? (
+        <div className="mb-6 rounded-xl border border-dashed border-greige-300 px-6 py-8 text-center text-[13.5px] text-ink-mute">
+          {"Noch keine Dateien hochgeladen."}
+        </div>
+      ) : (
+        <div className="mb-6 space-y-2">
+          {baum.map((z) => (
+            <div key={z.kat.slug} className="space-y-2">
+              {z.eigene > 0 || z.kinder.length > 0
+                ? zeile(z.kat.slug, z.kat.title, z.kat.icon, z.eigene, false)
+                : null}
+              {z.kinder.map((k) =>
+                zeile(k.slug, k.title, k.icon, anzahl(k.slug), true)
+              )}
+            </div>
+          ))}
+          {verwaist.map((slug) =>
+            zeile(slug, "Ohne Kategorie", "Archive", anzahl(slug), false)
+          )}
+        </div>
+      )}
 
       <h2 className="mb-2 text-[15px] font-semibold text-ink">
         Eingebaute Kategorien
@@ -2161,10 +2411,21 @@ export default function AdminPage() {
   const [reiter, setReiter] = useState<"seiten" | "dateien" | "kategorien">(
     "seiten"
   );
+  const [dateiFilter, setDateiFilter] = useState("");
+
+  // Aus dem Kategorien-Reiter heraus die Dateien einer Kategorie oeffnen
+  const oeffneDateien = (slug: string) => {
+    setDateiFilter(slug);
+    setReiter("dateien");
+  };
 
   if (!token) return <Anmeldung onToken={merken} />;
   return (
     <div className="min-h-screen bg-offwhite">
+      {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
+      <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
+        Stand: KATEGORIE-DATEIEN
+      </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
           type="button"
@@ -2209,9 +2470,17 @@ export default function AdminPage() {
       {reiter === "seiten" ? (
         <Baukasten token={token} abmelden={abmelden} />
       ) : reiter === "dateien" ? (
-        <DateiVerwaltung token={token} abmelden={abmelden} />
+        <DateiVerwaltung
+          token={token}
+          abmelden={abmelden}
+          startFilter={dateiFilter}
+        />
       ) : (
-        <KategorieVerwaltung token={token} abmelden={abmelden} />
+        <KategorieVerwaltung
+          token={token}
+          abmelden={abmelden}
+          oeffneDateien={oeffneDateien}
+        />
       )}
     </div>
   );

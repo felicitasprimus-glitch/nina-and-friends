@@ -157,6 +157,18 @@ export const unterKategorien: Category[] = [
   { slug: "pk-alte-dateien", parent: "produkte", icon: "History",
     title: "Alte Dateien / Produkte", description: "Archiv: aeltere Unterlagen und ausgelaufene Produkte." },
 
+  // --- Katalog Fruehjahr/Sommer 26 ---
+  { slug: "kfs-kataloge", parent: "katalog-fs-26", icon: "Library",
+    title: "Kataloge", description: "Der Fr\u00FChjahr-/Sommerkatalog 2026 als PDF und Online-Version." },
+  { slug: "kfs-preislisten", parent: "katalog-fs-26", icon: "ListChecks",
+    title: "Preislisten", description: "Alle Preislisten zur Saison, auch die bebilderte Fassung." },
+  { slug: "kfs-produktinfos", parent: "katalog-fs-26", icon: "Boxes",
+    title: "Produktinfos & Schulung", description: "Produktfolien, Schulungsunterlagen und Details zu den Neuheiten." },
+  { slug: "kfs-bilder-videos", parent: "katalog-fs-26", icon: "Images",
+    title: "Bilder & Videos", description: "Fertige Bilder und Videos f\u00FCr deine Beitr\u00E4ge und Storys." },
+  { slug: "kfs-programme", parent: "katalog-fs-26", icon: "Gift",
+    title: "Programme & Aktionen", description: "Gastgeber-Bonusprogramm, Fast Track und die Startaktionen." },
+
   // --- Alles fuer deine Kochshow ---
   { slug: "ks-gastgebersuche", parent: "kochshow", icon: "UserSearch",
     title: "Gastgebersuche", description: "So findest du neue Gastgeberinnen fuer deine Shows." },
@@ -876,3 +888,48 @@ export const searchContents = (query: string) => {
     );
   });
 };
+
+// Fest eingebaute Links (erscheinen im Bereich zusaetzlich zu den
+// im Admin hochgeladenen Dateien). Werden nicht ueber /admin verwaltet.
+export interface EingebauteDatei {
+  id: string;
+  art: string;
+  bereich: string;
+  titel: string;
+  dateiname: string;
+  typ: string;
+  groesse: number;
+  erstellt: number;
+  url: string;
+  vorschauUrl: string;
+  istBild: boolean;
+}
+
+export const eingebauteDateien: EingebauteDatei[] = [
+  {
+    id: "fix-produktschulung-edelstahl",
+    art: "link",
+    bereich: "kfs-produktinfos",
+    titel: "Produktschulung Edelstahl Kollektion",
+    dateiname: "",
+    typ: "link",
+    groesse: 0,
+    erstellt: 1755000000000,
+    url: "https://stir.pamperedchef.at/produktschulung-edelstahl-kollektion/",
+    vorschauUrl: "",
+    istBild: false,
+  },
+  {
+    id: "fix-katalog-issuu-fs-2026",
+    art: "link",
+    bereich: "kfs-kataloge",
+    titel: "Katalog Fr\u00FChjahr/Sommer 2026 online bl\u00E4ttern",
+    dateiname: "",
+    typ: "link",
+    groesse: 0,
+    erstellt: 1755000000000,
+    url: "https://issuu.com/pamperedchefeurope/docs/fr_hjahr_sommer_2026_katalog_-_deutschland_sterre",
+    vorschauUrl: "",
+    istBild: false,
+  },
+];

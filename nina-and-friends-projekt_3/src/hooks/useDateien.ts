@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { eingebauteDateien } from "../data/content";
 
 export interface DateiEintrag {
   id: string;
@@ -16,8 +17,17 @@ export interface DateiEintrag {
 
 let zwischenspeicher: DateiEintrag[] | null = null;
 
+// Fest im Code hinterlegte Links vorne anstellen, ohne Doppelte
+function mitEingebauten(liste: DateiEintrag[]): DateiEintrag[] {
+  const vorhanden = new Set(liste.map((d) => d.id));
+  const fix = eingebauteDateien.filter((d) => !vorhanden.has(d.id));
+  return [...fix, ...liste];
+}
+
 export function useDateien() {
-  const [dateien, setDateien] = useState<DateiEintrag[]>(zwischenspeicher || []);
+  const [dateien, setDateien] = useState<DateiEintrag[]>(
+    zwischenspeicher || mitEingebauten([])
+  );
   const [laedt, setLaedt] = useState(!zwischenspeicher);
 
   useEffect(() => {
@@ -27,7 +37,7 @@ export function useDateien() {
         .then((r) => r.json())
         .then((d) => {
           if (!aktiv) return;
-          const liste: DateiEintrag[] = d.dateien || [];
+          const liste: DateiEintrag[] = mitEingebauten(d.dateien || []);
           zwischenspeicher = liste;
           setDateien(liste);
         })
