@@ -1,0 +1,4 @@
+/api/admin/*  /.netlify/functions/admin   200
+/api/seiten   /.netlify/functions/seiten  200
+/s/*          /.netlify/functions/show    200
+/*            /index.html                 200
