@@ -21,11 +21,25 @@ export default async function handler() {
       versteckt = [];
     }
 
-    return new Response(JSON.stringify({ kategorien: alle, versteckt }), {
+    // Im Admin vergebene Namen, die den Titel ueberschreiben
+    let namen = {};
+    try {
+      const ns = getStore({ name: "nina-kat-namen", consistency: "strong" });
+      const res = await ns.list();
+      for (const b of res.blobs) {
+        const wert = await ns.get(b.key, { type: "json" });
+        if (wert && wert.titel) namen[b.key] = wert.titel;
+      }
+    } catch {
+      namen = {};
+    }
+
+    return new Response(JSON.stringify({ kategorien: alle, versteckt, namen }), {
       status: 200,
       headers: {
         "Content-Type": "application/json; charset=utf-8",
-        "Cache-Control": "public, max-age=30, stale-while-revalidate=300",
+        // Nicht zwischenspeichern: neue Eintraege sollen sofort sichtbar sein
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {

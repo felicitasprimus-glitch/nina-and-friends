@@ -25,6 +25,11 @@ function kategorienStore() {
 function verstecktStore() {
   return getStore({ name: "nina-kat-versteckt", consistency: "strong" });
 }
+// Eigene Namen, die einen Kategorietitel ueberschreiben (auch bei
+// eingebauten Kategorien, die sonst nur im Code stehen).
+function namenStore() {
+  return getStore({ name: "nina-kat-namen", consistency: "strong" });
+}
 
 function slugify(text) {
   return String(text)
@@ -518,6 +523,47 @@ export default async function handler(request) {
           await ks.delete(b.key);
         }
       }
+      return json({ ok: true });
+    }
+
+    // --- Eigene Kategorienamen: auflisten ---
+    if (aktion === "kategorienamen" && request.method === "GET") {
+      const ns = namenStore();
+      const { blobs } = await ns.list();
+      const namen = {};
+      for (const b of blobs) {
+        const wert = await ns.get(b.key, { type: "json" });
+        if (wert && wert.titel) namen[b.key] = wert.titel;
+      }
+      return json({ namen });
+    }
+
+    // --- Kategorie umbenennen ---
+    if (aktion === "kategorienamen" && request.method === "POST") {
+      const body = await request.json();
+      const slug = String(body.slug || "").trim();
+      const titel = String(body.titel || "").trim();
+      if (!slug) return json({ error: "slug fehlt" }, 400);
+      if (!titel) return json({ error: "Bitte einen Namen angeben." }, 400);
+      if (titel.length > 60)
+        return json({ error: "Der Name ist zu lang (max. 60 Zeichen)." }, 400);
+
+      // Eigene Kategorien direkt umbenennen, der Slug bleibt gleich,
+      // damit die zugeordneten Dateien erhalten bleiben.
+      const ks = kategorienStore();
+      const eigene = await ks.get(slug, { type: "json" });
+      if (eigene) {
+        await ks.setJSON(slug, { ...eigene, title: titel });
+      }
+      await namenStore().setJSON(slug, { slug, titel });
+      return json({ ok: true, slug, titel });
+    }
+
+    // --- Umbenennung zuruecknehmen (Originalname gilt wieder) ---
+    if (aktion === "kategorienamen" && request.method === "DELETE") {
+      const slug = url.searchParams.get("slug");
+      if (!slug) return json({ error: "slug fehlt" }, 400);
+      await namenStore().delete(slug);
       return json({ ok: true });
     }
 

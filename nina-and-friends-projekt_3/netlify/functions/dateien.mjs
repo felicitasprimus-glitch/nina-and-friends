@@ -32,7 +32,8 @@ function json(inhalt, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=60, stale-while-revalidate=300",
+      // Nicht zwischenspeichern: neue Eintraege sollen sofort sichtbar sein
+      "Cache-Control": "no-store",
     },
   });
 }
