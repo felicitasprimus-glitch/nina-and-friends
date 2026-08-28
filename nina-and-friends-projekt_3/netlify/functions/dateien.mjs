@@ -21,6 +21,7 @@ function dateiAusgabe(r) {
     typ: r.typ || art,
     groesse: r.groesse || 0,
     erstellt: r.erstellt || 0,
+    reihenfolge: r.reihenfolge || 0,
     url,
     vorschauUrl,
     istBild,
@@ -50,7 +51,15 @@ export default async function handler(request) {
     ).filter(Boolean);
 
     if (bereich) alle = alle.filter((r) => r.bereich === bereich);
-    alle.sort((a, b) => (b.erstellt || 0) - (a.erstellt || 0));
+    // Eigene Reihenfolge zuerst, alles ohne Reihenfolge danach (neueste oben)
+    alle.sort((a, b) => {
+      const ra = a.reihenfolge || 0;
+      const rb = b.reihenfolge || 0;
+      if (ra && rb) return ra - rb;
+      if (ra) return -1;
+      if (rb) return 1;
+      return (b.erstellt || 0) - (a.erstellt || 0);
+    });
 
     return json({ dateien: alle.map(dateiAusgabe) });
   } catch (err) {
