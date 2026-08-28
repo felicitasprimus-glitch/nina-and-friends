@@ -70,9 +70,31 @@ export function useKategorien() {
   const umbenannt = (k: Category): Category =>
     namen[k.slug] ? { ...k, title: namen[k.slug] } : k;
 
-  const alle: Category[] = [...eingebautAlle, ...eigene]
+  const roh: Category[] = [...eingebautAlle, ...eigene]
     .filter(sichtbar)
     .map(umbenannt);
+
+  // Jede Unterkategorie direkt hinter ihre Hauptkategorie stellen,
+  // damit Auswahllisten die Zugehoerigkeit zeigen.
+  const alle: Category[] = [];
+  const schonDrin = new Set<string>();
+  roh
+    .filter((k) => !k.parent)
+    .forEach((h) => {
+      alle.push(h);
+      schonDrin.add(h.slug);
+      roh
+        .filter((k) => k.parent === h.slug)
+        .forEach((u) => {
+          alle.push(u);
+          schonDrin.add(u.slug);
+        });
+    });
+  // Reste, deren Hauptkategorie fehlt oder ausgeblendet ist
+  roh.forEach((k) => {
+    if (!schonDrin.has(k.slug)) alle.push(k);
+  });
+
   const haupt: Category[] = [
     ...eingebautHaupt,
     ...eigene.filter((k) => !k.parent),
