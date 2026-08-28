@@ -43,6 +43,65 @@ function slugify(text) {
 }
 
 // Datei-Datensatz in die Form fuer App/Admin bringen
+// Holt das Vorschaubild, das eine Seite selbst hinterlegt (og:image).
+// Das ist dasselbe Bild, das z. B. WhatsApp beim Teilen eines Links zeigt.
+// Schlaegt das fehl, bleibt die Kachel einfach ohne Bild.
+async function bildAusSeite(seitenUrl) {
+  try {
+    const ziel = new URL(seitenUrl);
+    if (ziel.protocol !== "https:" && ziel.protocol !== "http:") return null;
+
+    const abbruch = AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined;
+    const antwort = await fetch(ziel.href, {
+      signal: abbruch,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; NinaAndFriends/1.0; +https://ninaandfriends.netlify.app)",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    if (!antwort.ok) return null;
+    const typ = antwort.headers.get("content-type") || "";
+    if (!typ.includes("html")) return null;
+
+    // Nur den Anfang lesen, die Angaben stehen im Kopf der Seite
+    const html = (await antwort.text()).slice(0, 200000);
+    const suchen = (name) => {
+      const q = '["\\\']';
+      const muster = new RegExp(
+        "<meta[^>]+(?:property|name)=" + q + name + q + "[^>]*content=" + q + "([^\"']+)" + q,
+        "i"
+      );
+      const treffer = html.match(muster);
+      if (treffer) return treffer[1];
+      // Die Attribute koennen auch in umgekehrter Reihenfolge stehen
+      const muster2 = new RegExp(
+        "<meta[^>]+content=" + q + "([^\"']+)" + q + "[^>]*(?:property|name)=" + q + name + q,
+        "i"
+      );
+      const treffer2 = html.match(muster2);
+      return treffer2 ? treffer2[1] : null;
+    };
+
+    const bildUrl =
+      suchen("og:image") || suchen("twitter:image") || suchen("og:image:url");
+    if (!bildUrl) return null;
+
+    const volleUrl = new URL(bildUrl, ziel.href).href;
+    const bildAntwort = await fetch(volleUrl, {
+      signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
+    });
+    if (!bildAntwort.ok) return null;
+    const bildTyp = bildAntwort.headers.get("content-type") || "image/jpeg";
+    if (!bildTyp.startsWith("image/")) return null;
+    const bytes = Buffer.from(await bildAntwort.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 4 * 1024 * 1024) return null;
+    return { bytes, typ: bildTyp };
+  } catch {
+    return null;
+  }
+}
+
 function dateiAusgabe(r) {
   const art = r.art || "datei";
   const istBild = art === "datei" && String(r.typ || "").startsWith("image/");
@@ -60,6 +119,7 @@ function dateiAusgabe(r) {
     typ: r.typ || art,
     groesse: r.groesse || 0,
     erstellt: r.erstellt || 0,
+    reihenfolge: r.reihenfolge || 0,
     url,
     vorschauUrl,
     istBild,
@@ -358,7 +418,14 @@ export default async function handler(request) {
       const alle = (
         await Promise.all(blobs.map((b) => ds.get(b.key, { type: "json" })))
       ).filter(Boolean);
-      alle.sort((a, b) => (b.erstellt || 0) - (a.erstellt || 0));
+      alle.sort((a, b) => {
+        const ra = a.reihenfolge || 0;
+        const rb = b.reihenfolge || 0;
+        if (ra && rb) return ra - rb;
+        if (ra) return -1;
+        if (rb) return 1;
+        return (b.erstellt || 0) - (a.erstellt || 0);
+      });
       return json({ dateien: alle.map(dateiAusgabe) });
     }
 
@@ -408,6 +475,16 @@ export default async function handler(request) {
         rec.titel = rec.titel || body.linkUrl;
         rec.typ = "link";
         await vorschauSpeichern();
+        // Kein eigenes Bild mitgegeben: von der verlinkten Seite holen
+        if (!rec.vorschauKey) {
+          const gefunden = await bildAusSeite(body.linkUrl);
+          if (gefunden) {
+            rec.vorschauKey = "dv_" + id;
+            await ms.set(rec.vorschauKey, gefunden.bytes, {
+              metadata: { contentType: gefunden.typ, filename: "vorschau" },
+            });
+          }
+        }
       } else {
         // art === "datei"
         if (body.urlExtern) {
@@ -447,6 +524,22 @@ export default async function handler(request) {
     }
 
     // --- Datei loeschen ---
+    // --- Reihenfolge der Kacheln innerhalb einer Kategorie speichern ---
+    if (aktion === "dateien" && request.method === "PATCH") {
+      const body = await request.json();
+      const ids = Array.isArray(body.ids) ? body.ids : [];
+      if (ids.length === 0) return json({ error: "Keine Eintraege." }, 400);
+      const ds = dateienStore();
+      let n = 0;
+      for (let i = 0; i < ids.length; i++) {
+        const rec = await ds.get(ids[i], { type: "json" });
+        if (!rec) continue;
+        await ds.setJSON(ids[i], { ...rec, reihenfolge: i + 1 });
+        n++;
+      }
+      return json({ ok: true, anzahl: n });
+    }
+
     if (aktion === "dateien" && request.method === "DELETE") {
       const id = url.searchParams.get("id");
       if (!id) return json({ error: "id fehlt" }, 400);
