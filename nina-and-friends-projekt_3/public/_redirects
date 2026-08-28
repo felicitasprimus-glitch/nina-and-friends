@@ -1,4 +1,14 @@
-/api/admin/*  /.netlify/functions/admin   200
-/api/seiten   /.netlify/functions/seiten  200
-/s/*          /.netlify/functions/show    200
-/*            /index.html                 200
+# Diese Datei hat Vorrang vor netlify.toml.
+# Jede /api/... Route muss deshalb HIER stehen, sonst landet sie
+# bei der letzten Zeile und wird von der App als "Seite nicht gefunden" angezeigt.
+
+/api/admin/*    /.netlify/functions/admin       200
+/api/seiten     /.netlify/functions/seiten      200
+/api/kategorien /.netlify/functions/kategorien  200
+/api/dateien    /.netlify/functions/dateien     200
+/api/medien/*   /.netlify/functions/medien      200
+/api/push/*     /.netlify/functions/push        200
+/s/*            /.netlify/functions/show        200
+
+# Alles andere: die App (Single Page App)
+/*              /index.html                     200
