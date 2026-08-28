@@ -1258,7 +1258,7 @@ function Baukasten({ token, abmelden }: { token: string; abmelden: () => void })
           <option value="">Keine Kategorie</option>
           {kategorien.map((k) => (
             <option key={k.slug} value={k.slug}>
-              {k.parent ? "\u00A0\u00A0\u00A0\u2014 " : ""}
+              {k.parent ? "\u00A0\u00A0\u00A0\u21B3 " : ""}
               {k.title}
             </option>
           ))}
@@ -1438,6 +1438,7 @@ interface DateiInfo {
   dateiname: string;
   typ: string;
   groesse: number;
+  reihenfolge?: number;
   url: string;
   vorschauUrl: string;
   istBild: boolean;
@@ -1565,8 +1566,9 @@ function DateiVerwaltung({
   const [art, setArt] = useState<"datei" | "youtube" | "link">("datei");
   const [bereich, setBereich] = useState("");
   const [titel, setTitel] = useState("");
-  const [datei, setDatei] = useState<File | null>(null);
+  const [dateiListe, setDateiListe] = useState<File[]>([]);
   const [vorschau, setVorschau] = useState<File | null>(null);
+  const [fortschritt, setFortschritt] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [laeuft, setLaeuft] = useState(false);
@@ -1597,91 +1599,134 @@ function DateiVerwaltung({
 
   const zuruecksetzen = () => {
     setTitel("");
-    setDatei(null);
+    setDateiListe([]);
     setVorschau(null);
     setYoutubeUrl("");
     setLinkUrl("");
   };
 
+  // Eine einzelne Datei hochladen. Titel kommt aus dem Dateinamen,
+  // wenn im Feld nichts steht.
+  const eineDateiHochladen = async (datei: File, eigenerTitel: string) => {
+    const body: Record<string, unknown> = {
+      art: "datei",
+      bereich,
+      titel: eigenerTitel,
+    };
+      if (supabaseAktiv()) {
+        // Grosse Dateien: signierte URL vom Server holen (umgeht RLS)
+        const sig = await api("signed-upload", {
+          method: "POST",
+          body: JSON.stringify({ dateiname: datei.name }),
+        });
+        await supabaseUploadSigniert(
+          sig.pfad,
+          sig.token,
+          datei,
+          datei.type || "application/octet-stream"
+        );
+        body.urlExtern = sig.publicUrl;
+        body.dateiname = datei.name;
+        body.typ = datei.type;
+        body.groesse = datei.size;
+
+        // Vorschau (manuell, oder automatisch aus PDF-Seite 1)
+        let vorschauBlob: Blob | null = null;
+        let vTyp = "image/jpeg";
+        let vName = datei.name + "-vorschau.jpg";
+        if (vorschau) {
+          vorschauBlob = vorschau;
+          vTyp = vorschau.type;
+          vName = vorschau.name;
+        } else if (istPdf(datei)) {
+          const b64 = await pdfVorschauBase64(datei);
+          if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
+        } else if (istVideo(datei)) {
+          const b64 = await videoVorschauBase64(datei);
+          if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
+        }
+        if (vorschauBlob) {
+          const sigV = await api("signed-upload", {
+            method: "POST",
+            body: JSON.stringify({ dateiname: vName }),
+          });
+          await supabaseUploadSigniert(sigV.pfad, sigV.token, vorschauBlob, vTyp);
+          body.vorschauExtern = sigV.publicUrl;
+        }
+      } else {
+        // Ohne Supabase: max. 5 MB ueber Netlify
+        if (datei.size > 5 * 1024 * 1024) {
+          setFehler(
+            "Datei zu gross (max. 5 MB ohne Supabase). Richte Supabase ein oder nutze YouTube/Link."
+          );
+          return;
+        }
+        body.datei = await dateiZuBase64(datei);
+        body.dateiname = datei.name;
+        body.typ = datei.type;
+        if (vorschau) {
+          body.vorschau = await dateiZuBase64(vorschau);
+          body.vorschauTyp = vorschau.type;
+        } else if (istPdf(datei)) {
+          const auto = await pdfVorschauBase64(datei);
+          if (auto) {
+            body.vorschau = auto;
+            body.vorschauTyp = "image/jpeg";
+          }
+        } else if (istVideo(datei)) {
+          const auto = await videoVorschauBase64(datei);
+          if (auto) {
+            body.vorschau = auto;
+            body.vorschauTyp = "image/jpeg";
+          }
+        }
+      }
+    await api("dateien", { method: "POST", body: JSON.stringify(body) });
+  };
+
   const hochladen = async () => {
     setFehler("");
-    const body: Record<string, unknown> = { art, bereich, titel: titel.trim() };
     try {
       if (art === "datei") {
-        if (!datei) {
+        if (dateiListe.length === 0) {
           setFehler("Bitte zuerst eine Datei waehlen.");
           return;
         }
         setLaeuft(true);
-        if (supabaseAktiv()) {
-          // Grosse Dateien: signierte URL vom Server holen (umgeht RLS)
-          const sig = await api("signed-upload", {
-            method: "POST",
-            body: JSON.stringify({ dateiname: datei.name }),
-          });
-          await supabaseUploadSigniert(
-            sig.pfad,
-            sig.token,
-            datei,
-            datei.type || "application/octet-stream"
+        const misslungen: string[] = [];
+        for (let i = 0; i < dateiListe.length; i++) {
+          const d = dateiListe[i];
+          setFortschritt(
+            "Lade " + (i + 1) + " von " + dateiListe.length + ": " + d.name
           );
-          body.urlExtern = sig.publicUrl;
-          body.dateiname = datei.name;
-          body.typ = datei.type;
-          body.groesse = datei.size;
-
-          // Vorschau (manuell, oder automatisch aus PDF-Seite 1)
-          let vorschauBlob: Blob | null = null;
-          let vTyp = "image/jpeg";
-          let vName = datei.name + "-vorschau.jpg";
-          if (vorschau) {
-            vorschauBlob = vorschau;
-            vTyp = vorschau.type;
-            vName = vorschau.name;
-          } else if (istPdf(datei)) {
-            const b64 = await pdfVorschauBase64(datei);
-            if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
-          } else if (istVideo(datei)) {
-            const b64 = await videoVorschauBase64(datei);
-            if (b64) vorschauBlob = base64ZuBlob(b64, "image/jpeg");
-          }
-          if (vorschauBlob) {
-            const sigV = await api("signed-upload", {
-              method: "POST",
-              body: JSON.stringify({ dateiname: vName }),
-            });
-            await supabaseUploadSigniert(sigV.pfad, sigV.token, vorschauBlob, vTyp);
-            body.vorschauExtern = sigV.publicUrl;
-          }
-        } else {
-          // Ohne Supabase: max. 5 MB ueber Netlify
-          if (datei.size > 5 * 1024 * 1024) {
-            setFehler(
-              "Datei zu gross (max. 5 MB ohne Supabase). Richte Supabase ein oder nutze YouTube/Link."
+          // Bei mehreren Dateien den Namen ohne Endung als Titel nehmen
+          const auto = d.name.replace(/\.[^.]+$/, "");
+          const eigener =
+            dateiListe.length === 1 && titel.trim() ? titel.trim() : auto;
+          try {
+            await eineDateiHochladen(d, eigener);
+          } catch (e) {
+            misslungen.push(
+              d.name + " (" + (e instanceof Error ? e.message : "Fehler") + ")"
             );
-            return;
-          }
-          body.datei = await dateiZuBase64(datei);
-          body.dateiname = datei.name;
-          body.typ = datei.type;
-          if (vorschau) {
-            body.vorschau = await dateiZuBase64(vorschau);
-            body.vorschauTyp = vorschau.type;
-          } else if (istPdf(datei)) {
-            const auto = await pdfVorschauBase64(datei);
-            if (auto) {
-              body.vorschau = auto;
-              body.vorschauTyp = "image/jpeg";
-            }
-          } else if (istVideo(datei)) {
-            const auto = await videoVorschauBase64(datei);
-            if (auto) {
-              body.vorschau = auto;
-              body.vorschauTyp = "image/jpeg";
-            }
           }
         }
-      } else if (art === "youtube") {
+        setFortschritt("");
+        if (misslungen.length > 0) {
+          setFehler(
+            "Nicht hochgeladen: " + misslungen.join(", ")
+          );
+        }
+        // Nur die geglueckten zuruecksetzen, Auswahl leeren
+        setDateiListe([]);
+        setTitel("");
+        setVorschau(null);
+        await laden();
+        return;
+      }
+
+      const body: Record<string, unknown> = { art, bereich, titel: titel.trim() };
+      if (art === "youtube") {
         if (!youtubeUrl.trim()) {
           setFehler("Bitte einen YouTube-Link eingeben.");
           return;
@@ -1707,6 +1752,35 @@ function DateiVerwaltung({
       setFehler(e instanceof Error ? e.message : "Hat nicht geklappt.");
     } finally {
       setLaeuft(false);
+      setFortschritt("");
+    }
+  };
+
+  // Kachel innerhalb der gewaehlten Kategorie nach oben oder unten schieben.
+  // Ganz oben links in der App steht der erste Eintrag der Liste.
+  const verschieben = async (id: string, richtung: -1 | 1) => {
+    if (!filter) return;
+    const inKategorie = dateien.filter((d) => d.bereich === filter);
+    const pos = inKategorie.findIndex((d) => d.id === id);
+    const ziel = pos + richtung;
+    if (pos < 0 || ziel < 0 || ziel >= inKategorie.length) return;
+
+    const neueReihe = [...inKategorie];
+    const [bewegt] = neueReihe.splice(pos, 1);
+    neueReihe.splice(ziel, 0, bewegt);
+
+    // sofort im Bildschirm umsortieren, damit es sich flott anfuehlt
+    const rest = dateien.filter((d) => d.bereich !== filter);
+    setDateien([...neueReihe, ...rest]);
+    setFehler("");
+    try {
+      await api("dateien", {
+        method: "PATCH",
+        body: JSON.stringify({ ids: neueReihe.map((d) => d.id) }),
+      });
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Verschieben fehlgeschlagen.");
+      await laden();
     }
   };
 
@@ -1780,7 +1854,7 @@ function DateiVerwaltung({
           <option value="">Keine Kategorie</option>
           {kategorien.map((k) => (
             <option key={k.slug} value={k.slug}>
-              {k.parent ? "\u00A0\u00A0\u00A0\u2014 " : ""}
+              {k.parent ? "\u00A0\u00A0\u00A0\u21B3 " : ""}
               {k.title}
             </option>
           ))}
@@ -1803,17 +1877,29 @@ function DateiVerwaltung({
                 ? "Datei (PDF, Bild, Video u. a. \u2013 auch gro\u00DF)"
                 : "Datei (PDF, Bild u. a., max. 5 MB)"}
             </label>
-            <label className="mb-3 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
+            <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-greige-300 bg-offwhite p-3 text-[13.5px] text-ink-soft transition hover:border-taupe-400">
               <Upload className="h-5 w-5 shrink-0 text-taupe-600" />
               <span className="min-w-0 flex-1 truncate">
-                {datei ? datei.name : "Datei ausw\u00E4hlen"}
+                {dateiListe.length === 0
+                  ? "Dateien ausw\u00E4hlen (mehrere m\u00F6glich)"
+                  : dateiListe.length === 1
+                  ? dateiListe[0].name
+                  : dateiListe.length + " Dateien ausgew\u00E4hlt"}
               </span>
               <input
                 type="file"
+                multiple
                 className="hidden"
-                onChange={(e) => setDatei(e.target.files?.[0] || null)}
+                onChange={(e) =>
+                  setDateiListe(Array.from(e.target.files || []))
+                }
               />
             </label>
+            {dateiListe.length > 1 ? (
+              <p className="mb-3 text-[12px] text-ink-mute">
+                {"Der Titel wird bei mehreren Dateien automatisch aus dem Dateinamen \u00FCbernommen."}
+              </p>
+            ) : null}
 
             <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
               {"Vorschaubild (optional \u2013 bei PDFs automatisch aus Seite 1)"}
@@ -1892,8 +1978,17 @@ function DateiVerwaltung({
           ) : (
             <Plus className="h-[18px] w-[18px]" />
           )}
-          {art === "datei" ? "Hochladen" : "Hinzuf\u00FCgen"}
+          {art === "datei"
+            ? dateiListe.length > 1
+              ? "Alle " + dateiListe.length + " hochladen"
+              : "Hochladen"
+            : "Hinzuf\u00FCgen"}
         </button>
+        {fortschritt ? (
+          <p className="mt-2 truncate text-center text-[12.5px] text-ink-mute">
+            {fortschritt}
+          </p>
+        ) : null}
       </div>
 
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1925,12 +2020,39 @@ function DateiVerwaltung({
         </div>
       ) : (
         <div className="space-y-2.5">
-          {gefiltert.map((d) => (
+          {!filter ? (
+            <p className="rounded-lg bg-greige-100 px-3 py-2 text-[12.5px] text-ink-mute">
+              {"Zum Sortieren oben eine Kategorie ausw\u00E4hlen. Der oberste Eintrag steht in der App links oben."}
+            </p>
+          ) : null}
+          {gefiltert.map((d, i) => (
             <div
               key={d.id}
               className="rounded-xl border border-greige-200 bg-white p-3"
             >
               <div className="flex items-center gap-3">
+                {filter ? (
+                  <div className="flex shrink-0 flex-col gap-1">
+                    <button
+                      type="button"
+                      onClick={() => verschieben(d.id, -1)}
+                      disabled={i === 0}
+                      aria-label="Nach oben schieben"
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100 disabled:opacity-30"
+                    >
+                      <ArrowUp className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => verschieben(d.id, 1)}
+                      disabled={i === gefiltert.length - 1}
+                      aria-label="Nach unten schieben"
+                      className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100 disabled:opacity-30"
+                    >
+                      <ArrowDown className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
                 <a
                   href={d.url}
                   target="_blank"
@@ -2512,7 +2634,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: KATEGORIEN-SOFORT
+        Stand: LINK-VORSCHAU
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
