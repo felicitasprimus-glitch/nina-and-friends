@@ -15,11 +15,13 @@ interface EigeneKategorie {
 let zwischenspeicher: Category[] | null = null;
 let verstecktCache: string[] = [];
 let namenCache: Record<string, string> = {};
+let reiheCache: Record<string, number> = {};
 
 export function useKategorien() {
   const [eigene, setEigene] = useState<Category[]>(zwischenspeicher || []);
   const [versteckt, setVersteckt] = useState<string[]>(verstecktCache);
   const [namen, setNamen] = useState<Record<string, string>>(namenCache);
+  const [reihe, setReihe] = useState<Record<string, number>>(reiheCache);
 
   useEffect(() => {
     let aktiv = true;
@@ -40,9 +42,11 @@ export function useKategorien() {
           zwischenspeicher = liste;
           verstecktCache = d.versteckt || [];
           namenCache = d.namen || {};
+          reiheCache = d.reihe || {};
           setEigene(liste);
           setVersteckt(d.versteckt || []);
           setNamen(d.namen || {});
+          setReihe(d.reihe || {});
         })
         .catch(() => {});
     };
@@ -74,35 +78,41 @@ export function useKategorien() {
     .filter(sichtbar)
     .map(umbenannt);
 
+  // Selbst festgelegte Reihenfolge zuerst, alles ohne Position danach
+  const nachPosition = (liste: Category[]) =>
+    [...liste].sort((a, b) => {
+      const pa = reihe[a.slug] || 0;
+      const pb = reihe[b.slug] || 0;
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
+
   // Jede Unterkategorie direkt hinter ihre Hauptkategorie stellen,
   // damit Auswahllisten die Zugehoerigkeit zeigen.
   const alle: Category[] = [];
   const schonDrin = new Set<string>();
-  roh
-    .filter((k) => !k.parent)
-    .forEach((h) => {
-      alle.push(h);
-      schonDrin.add(h.slug);
-      roh
-        .filter((k) => k.parent === h.slug)
-        .forEach((u) => {
-          alle.push(u);
-          schonDrin.add(u.slug);
-        });
+  nachPosition(roh.filter((k) => !k.parent)).forEach((h) => {
+    alle.push(h);
+    schonDrin.add(h.slug);
+    nachPosition(roh.filter((k) => k.parent === h.slug)).forEach((u) => {
+      alle.push(u);
+      schonDrin.add(u.slug);
     });
+  });
   // Reste, deren Hauptkategorie fehlt oder ausgeblendet ist
   roh.forEach((k) => {
     if (!schonDrin.has(k.slug)) alle.push(k);
   });
 
-  const haupt: Category[] = [
-    ...eingebautHaupt,
-    ...eigene.filter((k) => !k.parent),
-  ]
-    .filter(sichtbar)
-    .map(umbenannt);
+  const haupt: Category[] = nachPosition(
+    [...eingebautHaupt, ...eigene.filter((k) => !k.parent)]
+      .filter(sichtbar)
+      .map(umbenannt)
+  );
   const finde = (slug: string) => alle.find((c) => c.slug === slug);
   const unter = (slug: string) => alle.filter((c) => c.parent === slug);
 
-  return { alle, haupt, eigene, versteckt, namen, finde, unter };
+  return { alle, haupt, eigene, versteckt, namen, reihe, finde, unter };
 }
