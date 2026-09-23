@@ -34,14 +34,30 @@ export default async function handler() {
       namen = {};
     }
 
-    return new Response(JSON.stringify({ kategorien: alle, versteckt, namen }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        // Nicht zwischenspeichern: neue Eintraege sollen sofort sichtbar sein
-        "Cache-Control": "no-store",
-      },
-    });
+    // Selbst festgelegte Reihenfolge
+    let reihe = {};
+    try {
+      const rs = getStore({ name: "nina-kat-reihe", consistency: "strong" });
+      const res = await rs.list();
+      for (const b of res.blobs) {
+        const wert = await rs.get(b.key, { type: "json" });
+        if (wert && typeof wert.pos === "number") reihe[b.key] = wert.pos;
+      }
+    } catch {
+      reihe = {};
+    }
+
+    return new Response(
+      JSON.stringify({ kategorien: alle, versteckt, namen, reihe }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          // Nicht zwischenspeichern: neue Eintraege sollen sofort sichtbar sein
+          "Cache-Control": "no-store",
+        },
+      }
+    );
   } catch (err) {
     return new Response(JSON.stringify({ kategorien: [], error: String(err.message || err) }), {
       status: 200,
