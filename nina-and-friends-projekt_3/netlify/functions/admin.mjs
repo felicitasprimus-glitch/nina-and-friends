@@ -30,6 +30,10 @@ function verstecktStore() {
 function namenStore() {
   return getStore({ name: "nina-kat-namen", consistency: "strong" });
 }
+// Selbst festgelegte Reihenfolge der Kategorien (Slug -> Position)
+function katReiheStore() {
+  return getStore({ name: "nina-kat-reihe", consistency: "strong" });
+}
 
 function slugify(text) {
   return String(text)
@@ -658,6 +662,30 @@ export default async function handler(request) {
       if (!slug) return json({ error: "slug fehlt" }, 400);
       await namenStore().delete(slug);
       return json({ ok: true });
+    }
+
+    // --- Reihenfolge der Kategorien: auflisten ---
+    if (aktion === "kategoriereihe" && request.method === "GET") {
+      const rs = katReiheStore();
+      const { blobs } = await rs.list();
+      const reihe = {};
+      for (const b of blobs) {
+        const wert = await rs.get(b.key, { type: "json" });
+        if (wert && typeof wert.pos === "number") reihe[b.key] = wert.pos;
+      }
+      return json({ reihe });
+    }
+
+    // --- Reihenfolge speichern (Liste von Slugs in gewuenschter Folge) ---
+    if (aktion === "kategoriereihe" && request.method === "POST") {
+      const body = await request.json();
+      const slugs = Array.isArray(body.slugs) ? body.slugs : [];
+      if (slugs.length === 0) return json({ error: "Keine Kategorien." }, 400);
+      const rs = katReiheStore();
+      for (let i = 0; i < slugs.length; i++) {
+        await rs.setJSON(String(slugs[i]), { slug: slugs[i], pos: i + 1 });
+      }
+      return json({ ok: true, anzahl: slugs.length });
     }
 
     // --- Ausgeblendete (eingebaute) Kategorien: auflisten ---
