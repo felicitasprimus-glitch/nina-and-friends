@@ -2149,6 +2149,7 @@ function KategorieVerwaltung({
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState("");
   const [namen, setNamen] = useState<Record<string, string>>({});
+  const [reihe, setReihe] = useState<Record<string, number>>({});
 
   const laden = useCallback(async () => {
     setLaedt(true);
@@ -2160,6 +2161,8 @@ function KategorieVerwaltung({
       setVersteckt(v.versteckt || []);
       const n = await api("kategorienamen");
       setNamen(n.namen || {});
+      const r = await api("kategoriereihe");
+      setReihe(r.reihe || {});
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Fehler beim Laden.");
     } finally {
@@ -2298,6 +2301,48 @@ function KategorieVerwaltung({
     (slug) => !alleKats.some((k) => k.slug === slug)
   );
 
+  // Alle sichtbaren Hauptkategorien in der aktuellen Reihenfolge
+  const sortiertNachReihe = <T extends { slug: string }>(liste: T[]): T[] =>
+    [...liste].sort((a, b) => {
+      const pa = reihe[a.slug] || 0;
+      const pb = reihe[b.slug] || 0;
+      if (pa && pb) return pa - pb;
+      if (pa) return -1;
+      if (pb) return 1;
+      return 0;
+    });
+
+  // Hauptkategorie nach oben oder unten schieben
+  const kategorieVerschieben = async (slug: string, richtung: -1 | 1) => {
+    const liste = sortiertNachReihe(
+      alleKats.filter((k) => !k.parent).map((k) => ({ slug: k.slug }))
+    );
+    const pos = liste.findIndex((k) => k.slug === slug);
+    const ziel = pos + richtung;
+    if (pos < 0 || ziel < 0 || ziel >= liste.length) return;
+
+    const neuFolge = [...liste];
+    const [bewegt] = neuFolge.splice(pos, 1);
+    neuFolge.splice(ziel, 0, bewegt);
+
+    // sofort im Bildschirm umsortieren
+    const frisch: Record<string, number> = {};
+    neuFolge.forEach((k, i) => {
+      frisch[k.slug] = i + 1;
+    });
+    setReihe((alt) => ({ ...alt, ...frisch }));
+    setFehler("");
+    try {
+      await api("kategoriereihe", {
+        method: "POST",
+        body: JSON.stringify({ slugs: neuFolge.map((k) => k.slug) }),
+      });
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Verschieben fehlgeschlagen.");
+      await laden();
+    }
+  };
+
   // Eine Zeile im Abschnitt "Eingebaute Kategorien"
   const eingebauteZeile = (
     slug: string,
@@ -2316,6 +2361,26 @@ function KategorieVerwaltung({
           (eingerueckt ? "ml-6" : "")
         }
       >
+        {!eingerueckt ? (
+          <div className="flex shrink-0 flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => kategorieVerschieben(slug, -1)}
+              aria-label="Nach oben schieben"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => kategorieVerschieben(slug, 1)}
+              aria-label="Nach unten schieben"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100"
+            >
+              <ArrowDown className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
           <CategoryIcon name={ikon} className="h-5 w-5" />
         </span>
@@ -2517,10 +2582,10 @@ function KategorieVerwaltung({
         Eingebaute Kategorien
       </h2>
       <p className="mb-3 text-[12.5px] text-ink-mute">
-        {"Umbenennen mit dem Stift, ausblenden mit dem Auge. Unterordner stehen eingerueckt darunter."}
+        {"Pfeile zum Sortieren, Stift zum Umbenennen, Auge zum Entfernen. Entfernte Kategorien lassen sich jederzeit zurueckholen. Unterordner stehen eingerueckt darunter."}
       </p>
       <div className="mb-6 space-y-2">
-        {eingebauteHaupt.map((k) => (
+        {sortiertNachReihe(eingebauteHaupt).map((k) => (
           <div key={k.slug} className="space-y-2">
             {eingebauteZeile(k.slug, k.title, k.icon, false)}
             {eingebauteUnter
@@ -2545,7 +2610,7 @@ function KategorieVerwaltung({
         </div>
       ) : (
         <div className="space-y-2.5">
-          {eigene.map((k) => (
+          {sortiertNachReihe(eigene).map((k) => (
             <div
               key={k.slug}
               className="flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3"
@@ -2634,7 +2699,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: LINK-VORSCHAU
+        Stand: KATEGORIEN-SORTIEREN
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
