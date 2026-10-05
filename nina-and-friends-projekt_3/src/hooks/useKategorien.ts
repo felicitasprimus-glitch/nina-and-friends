@@ -25,6 +25,18 @@ export interface QuickLink {
   icon: string;
 }
 
+export interface Termin {
+  id: string;
+  titel: string;
+  untertitel?: string;
+  datum: string;
+  uhrzeit?: string;
+  link?: string;
+  erinnern?: boolean;
+}
+
+let termineCache: Termin[] = [];
+
 export function useKategorien() {
   const [eigene, setEigene] = useState<Category[]>(zwischenspeicher || []);
   const [versteckt, setVersteckt] = useState<string[]>(verstecktCache);
@@ -35,6 +47,7 @@ export function useKategorien() {
   const [schnellzugriffe, setSchnellzugriffe] = useState<QuickLink[] | null>(
     schnellCache
   );
+  const [termine, setTermine] = useState<Termin[]>(termineCache);
 
   useEffect(() => {
     let aktiv = true;
@@ -60,6 +73,7 @@ export function useKategorien() {
           schnellCache = Array.isArray(d.schnellzugriffe)
             ? d.schnellzugriffe
             : null;
+          termineCache = Array.isArray(d.termine) ? d.termine : [];
           setEigene(liste);
           setVersteckt(d.versteckt || []);
           setNamen(d.namen || {});
@@ -68,6 +82,7 @@ export function useKategorien() {
           setSchnellzugriffe(
             Array.isArray(d.schnellzugriffe) ? d.schnellzugriffe : null
           );
+          setTermine(Array.isArray(d.termine) ? d.termine : []);
         })
         .catch(() => {});
     };
@@ -149,6 +164,7 @@ export function useKategorien() {
     beschreibungen,
     reihe,
     schnellzugriffe,
+    termine,
     finde,
     unter,
   };
