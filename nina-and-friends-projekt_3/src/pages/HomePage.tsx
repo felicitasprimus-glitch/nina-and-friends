@@ -14,7 +14,8 @@ import { T } from "../data/content";
 import { useKategorien } from "../hooks/useKategorien";
 import { useHomeTrainings } from "../hooks/useContent";
 
-const quickTiles = [
+// Vorgabe, solange im Admin nichts eigenes gespeichert ist
+const standardQuickTiles = [
   { to: "/bereich/rezepte", label: "Team\u00ADkochshow", icon: "ChefHat" },
   { to: "/bereich/team-termine", label: "Team-Termine", icon: "CalendarDays" },
   { to: "/bereich/rezepte", label: "Rezepte", icon: "BookOpen" },
@@ -28,7 +29,11 @@ const quickTiles = [
 export default function HomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const { haupt } = useKategorien();
+  const { haupt, schnellzugriffe } = useKategorien();
+  const quickTiles =
+    schnellzugriffe && schnellzugriffe.length > 0
+      ? schnellzugriffe
+      : standardQuickTiles;
   const homeTrainings = useHomeTrainings();
 
   const goSearch = () => {
@@ -82,8 +87,8 @@ export default function HomePage() {
       <section>
         <SectionHeader title={T.quick} />
         <div className="grid grid-cols-4 gap-3">
-          {quickTiles.map((q) => (
-            <QuickTile key={q.label} {...q} />
+          {quickTiles.map((q, i) => (
+            <QuickTile key={q.to + "-" + i} {...q} />
           ))}
         </div>
       </section>
