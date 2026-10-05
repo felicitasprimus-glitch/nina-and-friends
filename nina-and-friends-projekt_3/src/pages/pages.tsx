@@ -584,8 +584,77 @@ export function NotFoundPage() {
 /* Export der Kategorienliste fuer moegliche weitere Nutzung */
 export { categories };
 
+// Eine Zeile in der Terminliste
+function TerminZeile({
+  termin,
+}: {
+  termin: {
+    id: string;
+    titel: string;
+    untertitel?: string;
+    datum: string;
+    uhrzeit?: string;
+    link?: string;
+  };
+}) {
+  const d = new Date(termin.datum + "T12:00:00");
+  const datumLabel = Number.isNaN(d.getTime())
+    ? termin.datum
+    : d.toLocaleDateString("de-DE", {
+        weekday: "short",
+        day: "2-digit",
+        month: "long",
+      });
+
+  const innen = (
+    <>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+        <CategoryIcon name="Users" className="h-5 w-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <span className="block text-[15px] font-semibold text-ink">
+          {termin.titel}
+        </span>
+        {termin.untertitel ? (
+          <span className="block text-[13px] text-ink-mute">
+            {termin.untertitel}
+          </span>
+        ) : null}
+        <span className="mt-0.5 block text-[13px] text-ink-soft">
+          {datumLabel + " \u00B7 " + (termin.uhrzeit || "20:00") + " Uhr"}
+        </span>
+      </div>
+    </>
+  );
+
+  const klassen =
+    "flex items-center gap-3 rounded-xl2 border border-greige-100 bg-white p-4";
+
+  if (termin.link) {
+    return (
+      <a
+        href={termin.link}
+        target="_blank"
+        rel="noreferrer"
+        className={klassen + " transition hover:border-taupe-300"}
+      >
+        {innen}
+      </a>
+    );
+  }
+  return <div className={klassen}>{innen}</div>;
+}
+
 export function NotificationsPage() {
-  const termine = useUpcomingByCategory("team-termine");
+  const ausKategorie = useUpcomingByCategory("team-termine");
+  const { termine: gepflegte } = useKategorien();
+
+  // Im Admin gepflegte Termine, vergangene fallen raus
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const kommende = gepflegte.filter(
+    (t) => new Date(t.datum + "T12:00:00") >= heute
+  );
   return (
     <section className="mx-auto max-w-3xl px-4 pb-8 pt-2">
       <BackButton />
@@ -599,15 +668,20 @@ export function NotificationsPage() {
       <h2 className="mb-3 mt-6 text-[15px] font-semibold text-ink">
         {"N\u00E4chste Termine"}
       </h2>
-      {termine.length === 0 ? (
+      {kommende.length === 0 && ausKategorie.length === 0 ? (
         <p className="rounded-xl2 border border-greige-100 bg-cream p-4 text-[14px] text-ink-mute">
           Zurzeit stehen keine Termine an.
         </p>
       ) : (
         <div className="space-y-3">
-          {termine.map((item) => (
-            <ContentCard key={item.id} item={item} />
+          {kommende.map((t) => (
+            <TerminZeile key={t.id} termin={t} />
           ))}
+          {kommende.length === 0
+            ? ausKategorie.map((item) => (
+                <ContentCard key={item.id} item={item} />
+              ))
+            : null}
         </div>
       )}
     </section>

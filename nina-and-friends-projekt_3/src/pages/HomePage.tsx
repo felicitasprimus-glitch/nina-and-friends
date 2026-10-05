@@ -8,6 +8,7 @@ import {
   QuickTile,
   SearchField,
   SectionHeader,
+  TerminCard,
   TrainingCard,
 } from "../components/ui";
 import { T } from "../data/content";
@@ -29,7 +30,14 @@ const standardQuickTiles = [
 export default function HomePage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  const { haupt, schnellzugriffe } = useKategorien();
+  const { haupt, schnellzugriffe, termine } = useKategorien();
+
+  // Im Admin gepflegte Termine haben Vorrang. Vergangene fallen raus.
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const kommendeTermine = termine
+    .filter((t) => new Date(t.datum + "T12:00:00") >= heute)
+    .slice(0, 3);
   const quickTiles =
     schnellzugriffe && schnellzugriffe.length > 0
       ? schnellzugriffe
@@ -66,12 +74,16 @@ export default function HomePage() {
       <section>
         <SectionHeader title={T.upcomingTrainings} linkTo="/bereich/schulungen" />
         <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0">
-          {homeTrainings.map((item) => (
-            <TrainingCard key={item.id} item={item} />
-          ))}
+          {kommendeTermine.length > 0
+            ? kommendeTermine.map((t) => (
+                <TerminCard key={t.id} termin={t} />
+              ))
+            : homeTrainings.map((item) => (
+                <TrainingCard key={item.id} item={item} />
+              ))}
         </div>
         <div className="mt-3 flex justify-center gap-1.5 sm:hidden">
-          {homeTrainings.map((_, i) => (
+          {(kommendeTermine.length > 0 ? kommendeTermine : homeTrainings).map((_, i) => (
             <span
               key={i}
               className={

@@ -2151,6 +2151,316 @@ interface EigeneKat {
   parent?: string;
 }
 
+/* ---------- Termine ---------- */
+
+interface TerminInfo {
+  id: string;
+  titel: string;
+  untertitel?: string;
+  datum: string;
+  uhrzeit?: string;
+  link?: string;
+  erinnern?: boolean;
+}
+
+function TerminVerwaltung({
+  token,
+  abmelden,
+}: {
+  token: string;
+  abmelden: () => void;
+}) {
+  const api = useApi(token, abmelden);
+  const [termine, setTermine] = useState<TerminInfo[]>([]);
+  const [laedt, setLaedt] = useState(true);
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState("");
+
+  const [bearbeitet, setBearbeitet] = useState("");
+  const [titel, setTitel] = useState("");
+  const [untertitel, setUntertitel] = useState("");
+  const [datum, setDatum] = useState("");
+  const [uhrzeit, setUhrzeit] = useState("20:00");
+  const [link, setLink] = useState("");
+  const [erinnern, setErinnern] = useState(true);
+
+  const laden = useCallback(async () => {
+    setLaedt(true);
+    setFehler("");
+    try {
+      const d = await api("termine");
+      setTermine(d.termine || []);
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Fehler beim Laden.");
+    } finally {
+      setLaedt(false);
+    }
+  }, [api]);
+
+  useEffect(() => {
+    laden();
+  }, [laden]);
+
+  const formularLeeren = () => {
+    setBearbeitet("");
+    setTitel("");
+    setUntertitel("");
+    setDatum("");
+    setUhrzeit("20:00");
+    setLink("");
+    setErinnern(true);
+  };
+
+  const bearbeiten = (t: TerminInfo) => {
+    setBearbeitet(t.id);
+    setTitel(t.titel);
+    setUntertitel(t.untertitel || "");
+    setDatum(t.datum);
+    setUhrzeit(t.uhrzeit || "20:00");
+    setLink(t.link || "");
+    setErinnern(t.erinnern !== false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const speichern = async () => {
+    if (!titel.trim()) {
+      setFehler("Bitte einen Titel angeben.");
+      return;
+    }
+    if (!datum) {
+      setFehler("Bitte ein Datum angeben.");
+      return;
+    }
+    setLaeuft(true);
+    setFehler("");
+    try {
+      await api("termine", {
+        method: "POST",
+        body: JSON.stringify({
+          id: bearbeitet || undefined,
+          titel: titel.trim(),
+          untertitel: untertitel.trim(),
+          datum,
+          uhrzeit,
+          link: link.trim(),
+          erinnern,
+        }),
+      });
+      formularLeeren();
+      await laden();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+    } finally {
+      setLaeuft(false);
+    }
+  };
+
+  const loeschen = async (id: string) => {
+    if (!window.confirm("Diesen Termin wirklich loeschen?")) return;
+    setFehler("");
+    try {
+      await api("termine?id=" + encodeURIComponent(id), { method: "DELETE" });
+      if (bearbeitet === id) formularLeeren();
+      await laden();
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Loeschen fehlgeschlagen.");
+    }
+  };
+
+  const heute = new Date();
+  heute.setHours(0, 0, 0, 0);
+  const istVorbei = (t: TerminInfo) =>
+    new Date(t.datum + "T12:00:00") < heute;
+
+  const anzeigeDatum = (t: TerminInfo) => {
+    const d = new Date(t.datum + "T12:00:00");
+    if (Number.isNaN(d.getTime())) return t.datum;
+    return d.toLocaleDateString("de-DE", {
+      weekday: "short",
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 pb-16 pt-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="font-serif text-[26px] text-ink">Termine</h1>
+        <button
+          type="button"
+          onClick={abmelden}
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-greige-200 bg-white px-3 text-[13px] text-ink-soft transition hover:bg-greige-100"
+        >
+          <LogOut className="h-4 w-4" />
+          Abmelden
+        </button>
+      </div>
+
+      <div className="mb-6 rounded-xl2 border border-greige-200 bg-white p-4">
+        <h2 className="mb-1 text-[15px] font-semibold text-ink">
+          {bearbeitet ? "Termin bearbeiten" : "Neuer Termin"}
+        </h2>
+        <p className="mb-3 text-[12.5px] text-ink-mute">
+          {"Erscheint auf der Startseite und unter Benachrichtigungen."}
+        </p>
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          Titel
+        </label>
+        <input
+          value={titel}
+          onChange={(e) => setTitel(e.target.value)}
+          placeholder="z. B. Monatsmeeting Oktober"
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        />
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          {"Untertitel (optional)"}
+        </label>
+        <input
+          value={untertitel}
+          onChange={(e) => setUntertitel(e.target.value)}
+          placeholder="z. B. Team-Meeting"
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        />
+
+        <div className="mb-3 flex gap-3">
+          <div className="flex-1">
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              Datum
+            </label>
+            <input
+              type="date"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+              className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+            />
+          </div>
+          <div className="w-32">
+            <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+              Uhrzeit
+            </label>
+            <input
+              type="time"
+              value={uhrzeit}
+              onChange={(e) => setUhrzeit(e.target.value)}
+              className="h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+            />
+          </div>
+        </div>
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          {"Link (optional) \u2013 z. B. der Zoom-Raum"}
+        </label>
+        <input
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          placeholder="https://..."
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        />
+
+        <label className="mb-4 flex cursor-pointer items-center gap-2 text-[13px] text-ink-soft">
+          <input
+            type="checkbox"
+            checked={erinnern}
+            onChange={(e) => setErinnern(e.target.checked)}
+            className="h-4 w-4 accent-taupe-500"
+          />
+          {"Push-Erinnerung schicken (am Vortag 18 Uhr und eine Stunde vorher)"}
+        </label>
+
+        {fehler ? (
+          <p className="mb-3 rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700">
+            {fehler}
+          </p>
+        ) : null}
+
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={speichern}
+            disabled={laeuft}
+            className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600 disabled:opacity-50"
+          >
+            {laeuft ? (
+              <Loader2 className="h-[18px] w-[18px] animate-spin" />
+            ) : (
+              <Save className="h-[18px] w-[18px]" />
+            )}
+            {bearbeitet ? "Speichern" : "Termin anlegen"}
+          </button>
+          {bearbeitet ? (
+            <button
+              type="button"
+              onClick={formularLeeren}
+              className="h-12 rounded-lg border border-greige-200 bg-white px-4 text-[14px] text-ink-soft transition hover:bg-greige-100"
+            >
+              Abbrechen
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <h2 className="mb-3 text-[15px] font-semibold text-ink">
+        {"Angelegte Termine"}
+      </h2>
+
+      {laedt ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-5 w-5 animate-spin text-taupe-500" />
+        </div>
+      ) : termine.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-greige-300 px-6 py-8 text-center text-[13.5px] text-ink-mute">
+          {"Noch keine Termine angelegt."}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {termine.map((t) => (
+            <div
+              key={t.id}
+              className={
+                "flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3 " +
+                (istVorbei(t) ? "opacity-55" : "")
+              }
+            >
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+                <Clock className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium text-ink">
+                  {t.titel}
+                </span>
+                <span className="block truncate text-[12px] text-ink-mute">
+                  {anzeigeDatum(t) + " \u00B7 " + (t.uhrzeit || "20:00") + " Uhr"}
+                  {istVorbei(t) ? " \u00B7 vorbei" : ""}
+                  {t.erinnern === false ? " \u00B7 ohne Erinnerung" : ""}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => bearbeiten(t)}
+                aria-label="Termin bearbeiten"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => loeschen(t.id)}
+                aria-label="Termin loeschen"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KategorieVerwaltung({
   token,
   abmelden,
@@ -2939,7 +3249,9 @@ export default function AdminPage() {
     setToken(null);
   }, []);
 
-  const [reiter, setReiter] = useState<"seiten" | "dateien" | "kategorien">(
+  const [reiter, setReiter] = useState<
+    "seiten" | "dateien" | "kategorien" | "termine"
+  >(
     "seiten"
   );
   const [dateiFilter, setDateiFilter] = useState("");
@@ -2955,7 +3267,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: SCHNELLZUGRIFF
+        Stand: TERMINE-ADMIN
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
@@ -2997,6 +3309,19 @@ export default function AdminPage() {
           <Tags className="h-4 w-4" />
           Kategorien
         </button>
+        <button
+          type="button"
+          onClick={() => setReiter("termine")}
+          className={
+            "flex h-10 flex-1 items-center justify-center gap-2 rounded-lg text-[14px] font-medium transition " +
+            (reiter === "termine"
+              ? "bg-taupe-500 text-offwhite"
+              : "border border-greige-200 bg-white text-ink-soft hover:bg-greige-100")
+          }
+        >
+          <Clock className="h-4 w-4" />
+          Termine
+        </button>
       </div>
       {reiter === "seiten" ? (
         <Baukasten token={token} abmelden={abmelden} />
@@ -3006,6 +3331,8 @@ export default function AdminPage() {
           abmelden={abmelden}
           startFilter={dateiFilter}
         />
+      ) : reiter === "termine" ? (
+        <TerminVerwaltung token={token} abmelden={abmelden} />
       ) : (
         <KategorieVerwaltung
           token={token}
