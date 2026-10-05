@@ -38,6 +38,10 @@ function katReiheStore() {
 function schnellStore() {
   return getStore({ name: "nina-schnellzugriffe", consistency: "strong" });
 }
+// Team-Termine samt Push-Erinnerungen
+function termineStore() {
+  return getStore({ name: "nina-termine", consistency: "strong" });
+}
 
 function slugify(text) {
   return String(text)
@@ -734,6 +738,53 @@ export default async function handler(request) {
         .filter((q) => q.label && q.to);
       await schnellStore().setJSON("liste", liste);
       return json({ ok: true, schnellzugriffe: liste });
+    }
+
+    // --- Termine: auflisten ---
+    if (aktion === "termine" && request.method === "GET") {
+      const ts = termineStore();
+      const { blobs } = await ts.list();
+      const alle = (
+        await Promise.all(blobs.map((b) => ts.get(b.key, { type: "json" })))
+      ).filter(Boolean);
+      alle.sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
+      return json({ termine: alle });
+    }
+
+    // --- Termin anlegen oder aendern ---
+    if (aktion === "termine" && request.method === "POST") {
+      const body = await request.json();
+      const titel = String(body.titel || "").trim();
+      const datum = String(body.datum || "").trim();
+      if (!titel) return json({ error: "Bitte einen Titel angeben." }, 400);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(datum))
+        return json({ error: "Bitte ein Datum angeben." }, 400);
+      const uhrzeit = String(body.uhrzeit || "").trim();
+      if (uhrzeit && !/^\d{2}:\d{2}$/.test(uhrzeit))
+        return json({ error: "Uhrzeit bitte als HH:MM angeben." }, 400);
+
+      const id = String(body.id || "").trim() || crypto.randomUUID();
+      const rec = {
+        id,
+        titel,
+        untertitel: String(body.untertitel || "").trim(),
+        datum,
+        uhrzeit: uhrzeit || "20:00",
+        link: String(body.link || "").trim(),
+        // Push-Erinnerung: am Vortag 18 Uhr und eine Stunde vorher
+        erinnern: body.erinnern !== false,
+        erstellt: Date.now(),
+      };
+      await termineStore().setJSON(id, rec);
+      return json({ termin: rec });
+    }
+
+    // --- Termin loeschen ---
+    if (aktion === "termine" && request.method === "DELETE") {
+      const id = url.searchParams.get("id");
+      if (!id) return json({ error: "id fehlt" }, 400);
+      await termineStore().delete(id);
+      return json({ ok: true });
     }
 
     // --- Ausgeblendete (eingebaute) Kategorien: auflisten ---

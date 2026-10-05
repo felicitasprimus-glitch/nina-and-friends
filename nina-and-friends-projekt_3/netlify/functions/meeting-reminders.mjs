@@ -13,18 +13,31 @@
 import webpush from "web-push";
 import { getStore } from "@netlify/blobs";
 
-const MEETINGS = [
-  "2026-01-28",
-  "2026-02-26",
-  "2026-03-30",
-  "2026-04-29",
-  "2026-05-28",
-  "2026-06-29",
-  "2026-07-29",
-  "2026-09-28",
-  "2026-10-29",
-  "2026-11-26",
+// Fallback, solange im Admin keine Termine gepflegt sind
+const MEETINGS_FALLBACK = [
+  "2026-01-28", "2026-02-26", "2026-03-30", "2026-04-29", "2026-05-28",
+  "2026-06-29", "2026-07-29", "2026-09-28", "2026-10-29", "2026-11-26",
 ];
+
+// Die im Admin angelegten Termine lesen
+async function termineLaden() {
+  try {
+    const ts = getStore({ name: "nina-termine", consistency: "strong" });
+    const { blobs } = await ts.list();
+    const alle = (
+      await Promise.all(blobs.map((b) => ts.get(b.key, { type: "json" })))
+    ).filter(Boolean);
+    const gepflegt = alle.filter((t) => t && t.datum && t.erinnern !== false);
+    if (gepflegt.length > 0) return gepflegt;
+  } catch {
+    // nicht erreichbar - dann die feste Liste nehmen
+  }
+  return MEETINGS_FALLBACK.map((d) => ({
+    titel: "Team-Meeting",
+    datum: d,
+    uhrzeit: "20:00",
+  }));
+}
 
 function berlinNow() {
   const fmt = new Intl.DateTimeFormat("en-CA", {
@@ -47,18 +60,24 @@ function dayBefore(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
-function dueReminder(now) {
-  for (const m of MEETINGS) {
-    if (now.date === m && now.hour === 19) {
+function dueReminder(now, termine) {
+  for (const t of termine) {
+    const start = String(t.uhrzeit || "20:00");
+    const startStunde = parseInt(start.slice(0, 2), 10);
+    const was = t.titel || "Team-Meeting";
+
+    // Eine Stunde vor Beginn
+    if (now.date === t.datum && now.hour === startStunde - 1) {
       return {
         title: "Gleich geht\u2019s los",
-        body: "In einer Stunde startet das Team-Meeting um 20 Uhr.",
+        body: "In einer Stunde startet " + was + " um " + start + " Uhr.",
       };
     }
-    if (now.date === dayBefore(m) && now.hour === 18) {
+    // Am Vortag um 18 Uhr
+    if (now.date === dayBefore(t.datum) && now.hour === 18) {
       return {
-        title: "Team-Meeting morgen",
-        body: "Morgen um 20 Uhr treffen wir uns \u2013 sei dabei!",
+        title: was + " morgen",
+        body: "Morgen um " + start + " Uhr treffen wir uns \u2013 sei dabei!",
       };
     }
   }
@@ -67,7 +86,8 @@ function dueReminder(now) {
 
 export default async function handler() {
   const now = berlinNow();
-  const reminder = dueReminder(now);
+  const termine = await termineLaden();
+  const reminder = dueReminder(now, termine);
 
   if (!reminder) {
     return new Response(JSON.stringify({ sent: 0, reason: "kein Termin faellig" }), { status: 200 });

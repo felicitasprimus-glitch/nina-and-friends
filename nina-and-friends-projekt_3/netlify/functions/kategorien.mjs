@@ -39,6 +39,19 @@ export default async function handler() {
       beschreibungen = {};
     }
 
+    // Team-Termine (im Admin gepflegt)
+    let termine = [];
+    try {
+      const ts = getStore({ name: "nina-termine", consistency: "strong" });
+      const res = await ts.list();
+      termine = (
+        await Promise.all(res.blobs.map((b) => ts.get(b.key, { type: "json" })))
+      ).filter(Boolean);
+      termine.sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
+    } catch {
+      termine = [];
+    }
+
     // Schnellzugriffe der Startseite (null = die eingebauten verwenden)
     let schnellzugriffe = null;
     try {
@@ -70,6 +83,7 @@ export default async function handler() {
         beschreibungen,
         reihe,
         schnellzugriffe,
+        termine,
       }),
       {
         status: 200,
