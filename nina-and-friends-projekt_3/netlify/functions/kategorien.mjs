@@ -21,17 +21,32 @@ export default async function handler() {
       versteckt = [];
     }
 
-    // Im Admin vergebene Namen, die den Titel ueberschreiben
+    // Im Admin vergebene Namen und Beschreibungen
     let namen = {};
+    let beschreibungen = {};
     try {
       const ns = getStore({ name: "nina-kat-namen", consistency: "strong" });
       const res = await ns.list();
       for (const b of res.blobs) {
         const wert = await ns.get(b.key, { type: "json" });
-        if (wert && wert.titel) namen[b.key] = wert.titel;
+        if (!wert) continue;
+        if (wert.titel) namen[b.key] = wert.titel;
+        if (typeof wert.beschreibung === "string")
+          beschreibungen[b.key] = wert.beschreibung;
       }
     } catch {
       namen = {};
+      beschreibungen = {};
+    }
+
+    // Schnellzugriffe der Startseite (null = die eingebauten verwenden)
+    let schnellzugriffe = null;
+    try {
+      const ss = getStore({ name: "nina-schnellzugriffe", consistency: "strong" });
+      const liste = await ss.get("liste", { type: "json" });
+      if (Array.isArray(liste)) schnellzugriffe = liste;
+    } catch {
+      schnellzugriffe = null;
     }
 
     // Selbst festgelegte Reihenfolge
@@ -48,7 +63,14 @@ export default async function handler() {
     }
 
     return new Response(
-      JSON.stringify({ kategorien: alle, versteckt, namen, reihe }),
+      JSON.stringify({
+        kategorien: alle,
+        versteckt,
+        namen,
+        beschreibungen,
+        reihe,
+        schnellzugriffe,
+      }),
       {
         status: 200,
         headers: {
