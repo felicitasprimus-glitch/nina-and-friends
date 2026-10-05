@@ -34,6 +34,10 @@ function namenStore() {
 function katReiheStore() {
   return getStore({ name: "nina-kat-reihe", consistency: "strong" });
 }
+// Die Kacheln im Schnellzugriff auf der Startseite
+function schnellStore() {
+  return getStore({ name: "nina-schnellzugriffe", consistency: "strong" });
+}
 
 function slugify(text) {
   return String(text)
@@ -118,7 +122,8 @@ function dateiAusgabe(r) {
     id: r.id,
     art,
     bereich: r.bereich || "",
-    titel: r.titel || r.dateiname || "",
+    titel: r.ohneTitel ? "" : r.titel || r.dateiname || "",
+    ohneTitel: r.ohneTitel === true,
     dateiname: r.dateiname || "",
     typ: r.typ || art,
     groesse: r.groesse || 0,
@@ -443,6 +448,8 @@ export default async function handler(request) {
         art,
         bereich: body.bereich || "",
         titel: (body.titel || "").trim(),
+        // Ausdruecklich ohne Titel: dann bleibt die Kachel unbeschriftet
+        ohneTitel: body.ohneTitel === true,
         erstellt: Date.now(),
         medienKey: "",
         vorschauKey: "",
@@ -471,12 +478,12 @@ export default async function handler(request) {
         if (!vid) return json({ error: "Kein gueltiger YouTube-Link." }, 400);
         rec.urlExtern = "https://www.youtube.com/watch?v=" + vid;
         rec.vorschauExtern = "https://img.youtube.com/vi/" + vid + "/hqdefault.jpg";
-        rec.titel = rec.titel || "YouTube-Video";
+        if (!rec.ohneTitel) rec.titel = rec.titel || "YouTube-Video";
         rec.typ = "youtube";
       } else if (art === "link") {
         if (!body.linkUrl) return json({ error: "Bitte einen Link angeben." }, 400);
         rec.urlExtern = body.linkUrl;
-        rec.titel = rec.titel || body.linkUrl;
+        if (!rec.ohneTitel) rec.titel = rec.titel || body.linkUrl;
         rec.typ = "link";
         await vorschauSpeichern();
         // Kein eigenes Bild mitgegeben: von der verlinkten Seite holen
@@ -497,7 +504,7 @@ export default async function handler(request) {
           rec.dateiname = body.dateiname || "";
           rec.typ = body.typ || "application/octet-stream";
           rec.groesse = Number(body.groesse) || 0;
-          rec.titel = rec.titel || rec.dateiname;
+          if (!rec.ohneTitel) rec.titel = rec.titel || rec.dateiname;
           if (body.vorschauExtern) rec.vorschauExtern = body.vorschauExtern;
           else await vorschauSpeichern();
         } else {
@@ -515,7 +522,7 @@ export default async function handler(request) {
           rec.dateiname = body.dateiname;
           rec.typ = body.typ || "application/octet-stream";
           rec.groesse = bytes.length;
-          rec.titel = rec.titel || body.dateiname;
+          if (!rec.ohneTitel) rec.titel = rec.titel || body.dateiname;
           await ms.set(rec.medienKey, bytes, {
             metadata: { contentType: rec.typ, filename: body.dateiname },
           });
@@ -628,32 +635,50 @@ export default async function handler(request) {
       const ns = namenStore();
       const { blobs } = await ns.list();
       const namen = {};
+      const beschreibungen = {};
       for (const b of blobs) {
         const wert = await ns.get(b.key, { type: "json" });
-        if (wert && wert.titel) namen[b.key] = wert.titel;
+        if (!wert) continue;
+        if (wert.titel) namen[b.key] = wert.titel;
+        if (typeof wert.beschreibung === "string")
+          beschreibungen[b.key] = wert.beschreibung;
       }
-      return json({ namen });
+      return json({ namen, beschreibungen });
     }
 
     // --- Kategorie umbenennen ---
     if (aktion === "kategorienamen" && request.method === "POST") {
       const body = await request.json();
       const slug = String(body.slug || "").trim();
-      const titel = String(body.titel || "").trim();
       if (!slug) return json({ error: "slug fehlt" }, 400);
-      if (!titel) return json({ error: "Bitte einen Namen angeben." }, 400);
-      if (titel.length > 60)
-        return json({ error: "Der Name ist zu lang (max. 60 Zeichen)." }, 400);
 
-      // Eigene Kategorien direkt umbenennen, der Slug bleibt gleich,
-      // damit die zugeordneten Dateien erhalten bleiben.
-      const ks = kategorienStore();
-      const eigene = await ks.get(slug, { type: "json" });
-      if (eigene) {
-        await ks.setJSON(slug, { ...eigene, title: titel });
+      const ns = namenStore();
+      const bisher = (await ns.get(slug, { type: "json" })) || { slug };
+
+      // Name nur aendern, wenn einer mitgeschickt wurde
+      if (body.titel !== undefined) {
+        const titel = String(body.titel || "").trim();
+        if (!titel) return json({ error: "Bitte einen Namen angeben." }, 400);
+        if (titel.length > 60)
+          return json({ error: "Der Name ist zu lang (max. 60 Zeichen)." }, 400);
+        bisher.titel = titel;
+        // Eigene Kategorien direkt umbenennen, der Slug bleibt gleich,
+        // damit die zugeordneten Dateien erhalten bleiben.
+        const ks = kategorienStore();
+        const eigene = await ks.get(slug, { type: "json" });
+        if (eigene) await ks.setJSON(slug, { ...eigene, title: titel });
       }
-      await namenStore().setJSON(slug, { slug, titel });
-      return json({ ok: true, slug, titel });
+
+      // Beschreibung unter der Ueberschrift
+      if (body.beschreibung !== undefined) {
+        const text = String(body.beschreibung || "").trim();
+        if (text.length > 300)
+          return json({ error: "Der Text ist zu lang (max. 300 Zeichen)." }, 400);
+        bisher.beschreibung = text;
+      }
+
+      await ns.setJSON(slug, { ...bisher, slug });
+      return json({ ok: true, ...bisher });
     }
 
     // --- Umbenennung zuruecknehmen (Originalname gilt wieder) ---
@@ -686,6 +711,29 @@ export default async function handler(request) {
         await rs.setJSON(String(slugs[i]), { slug: slugs[i], pos: i + 1 });
       }
       return json({ ok: true, anzahl: slugs.length });
+    }
+
+    // --- Schnellzugriffe der Startseite: auflisten ---
+    if (aktion === "schnellzugriffe" && request.method === "GET") {
+      const liste = await schnellStore().get("liste", { type: "json" });
+      return json({ schnellzugriffe: Array.isArray(liste) ? liste : null });
+    }
+
+    // --- Schnellzugriffe speichern (ganze Liste auf einmal) ---
+    if (aktion === "schnellzugriffe" && request.method === "POST") {
+      const body = await request.json();
+      const roh = Array.isArray(body.schnellzugriffe) ? body.schnellzugriffe : [];
+      if (roh.length > 12)
+        return json({ error: "Hoechstens 12 Schnellzugriffe." }, 400);
+      const liste = roh
+        .map((q) => ({
+          label: String(q.label || "").trim().slice(0, 40),
+          to: String(q.to || "").trim().slice(0, 200),
+          icon: String(q.icon || "Sparkles").trim().slice(0, 40),
+        }))
+        .filter((q) => q.label && q.to);
+      await schnellStore().setJSON("liste", liste);
+      return json({ ok: true, schnellzugriffe: liste });
     }
 
     // --- Ausgeblendete (eingebaute) Kategorien: auflisten ---
