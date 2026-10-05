@@ -16,12 +16,25 @@ let zwischenspeicher: Category[] | null = null;
 let verstecktCache: string[] = [];
 let namenCache: Record<string, string> = {};
 let reiheCache: Record<string, number> = {};
+let beschreibungCache: Record<string, string> = {};
+let schnellCache: QuickLink[] | null = null;
+
+export interface QuickLink {
+  label: string;
+  to: string;
+  icon: string;
+}
 
 export function useKategorien() {
   const [eigene, setEigene] = useState<Category[]>(zwischenspeicher || []);
   const [versteckt, setVersteckt] = useState<string[]>(verstecktCache);
   const [namen, setNamen] = useState<Record<string, string>>(namenCache);
   const [reihe, setReihe] = useState<Record<string, number>>(reiheCache);
+  const [beschreibungen, setBeschreibungen] =
+    useState<Record<string, string>>(beschreibungCache);
+  const [schnellzugriffe, setSchnellzugriffe] = useState<QuickLink[] | null>(
+    schnellCache
+  );
 
   useEffect(() => {
     let aktiv = true;
@@ -43,10 +56,18 @@ export function useKategorien() {
           verstecktCache = d.versteckt || [];
           namenCache = d.namen || {};
           reiheCache = d.reihe || {};
+          beschreibungCache = d.beschreibungen || {};
+          schnellCache = Array.isArray(d.schnellzugriffe)
+            ? d.schnellzugriffe
+            : null;
           setEigene(liste);
           setVersteckt(d.versteckt || []);
           setNamen(d.namen || {});
           setReihe(d.reihe || {});
+          setBeschreibungen(d.beschreibungen || {});
+          setSchnellzugriffe(
+            Array.isArray(d.schnellzugriffe) ? d.schnellzugriffe : null
+          );
         })
         .catch(() => {});
     };
@@ -71,8 +92,13 @@ export function useKategorien() {
 
   const sichtbar = (k: Category) => !versteckt.includes(k.slug);
   // Im Admin vergebene Namen gehen vor
-  const umbenannt = (k: Category): Category =>
-    namen[k.slug] ? { ...k, title: namen[k.slug] } : k;
+  const umbenannt = (k: Category): Category => {
+    let neu = k;
+    if (namen[k.slug]) neu = { ...neu, title: namen[k.slug] };
+    if (beschreibungen[k.slug] !== undefined)
+      neu = { ...neu, description: beschreibungen[k.slug] };
+    return neu;
+  };
 
   const roh: Category[] = [...eingebautAlle, ...eigene]
     .filter(sichtbar)
@@ -114,5 +140,16 @@ export function useKategorien() {
   const finde = (slug: string) => alle.find((c) => c.slug === slug);
   const unter = (slug: string) => alle.filter((c) => c.parent === slug);
 
-  return { alle, haupt, eigene, versteckt, namen, reihe, finde, unter };
+  return {
+    alle,
+    haupt,
+    eigene,
+    versteckt,
+    namen,
+    beschreibungen,
+    reihe,
+    schnellzugriffe,
+    finde,
+    unter,
+  };
 }
