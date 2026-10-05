@@ -29,6 +29,7 @@ import {
   Video,
 } from "lucide-react";
 import { useKategorien } from "../hooks/useKategorien";
+import type { QuickLink } from "../hooks/useKategorien";
 import { useDateien } from "../hooks/useDateien";
 import {
   hauptKategorien as eingebauteHaupt,
@@ -1569,6 +1570,7 @@ function DateiVerwaltung({
   const [dateiListe, setDateiListe] = useState<File[]>([]);
   const [vorschau, setVorschau] = useState<File | null>(null);
   const [fortschritt, setFortschritt] = useState("");
+  const [ohneTitel, setOhneTitel] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [laeuft, setLaeuft] = useState(false);
@@ -1599,6 +1601,7 @@ function DateiVerwaltung({
 
   const zuruecksetzen = () => {
     setTitel("");
+    setOhneTitel(false);
     setDateiListe([]);
     setVorschau(null);
     setYoutubeUrl("");
@@ -1612,6 +1615,7 @@ function DateiVerwaltung({
       art: "datei",
       bereich,
       titel: eigenerTitel,
+      ohneTitel,
     };
       if (supabaseAktiv()) {
         // Grosse Dateien: signierte URL vom Server holen (umgeht RLS)
@@ -1701,8 +1705,11 @@ function DateiVerwaltung({
           );
           // Bei mehreren Dateien den Namen ohne Endung als Titel nehmen
           const auto = d.name.replace(/\.[^.]+$/, "");
-          const eigener =
-            dateiListe.length === 1 && titel.trim() ? titel.trim() : auto;
+          const eigener = ohneTitel
+            ? ""
+            : dateiListe.length === 1 && titel.trim()
+            ? titel.trim()
+            : auto;
           try {
             await eineDateiHochladen(d, eigener);
           } catch (e) {
@@ -1720,12 +1727,18 @@ function DateiVerwaltung({
         // Nur die geglueckten zuruecksetzen, Auswahl leeren
         setDateiListe([]);
         setTitel("");
+        setOhneTitel(false);
         setVorschau(null);
         await laden();
         return;
       }
 
-      const body: Record<string, unknown> = { art, bereich, titel: titel.trim() };
+      const body: Record<string, unknown> = {
+        art,
+        bereich,
+        titel: ohneTitel ? "" : titel.trim(),
+        ohneTitel,
+      };
       if (art === "youtube") {
         if (!youtubeUrl.trim()) {
           setFehler("Bitte einen YouTube-Link eingeben.");
@@ -1866,9 +1879,19 @@ function DateiVerwaltung({
         <input
           value={titel}
           onChange={(e) => setTitel(e.target.value)}
+          disabled={ohneTitel}
           placeholder="z. B. Produktfolie Sommer 2026"
-          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+          className="mb-2 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400 disabled:opacity-50"
         />
+        <label className="mb-3 flex cursor-pointer items-center gap-2 text-[13px] text-ink-soft">
+          <input
+            type="checkbox"
+            checked={ohneTitel}
+            onChange={(e) => setOhneTitel(e.target.checked)}
+            className="h-4 w-4 accent-taupe-500"
+          />
+          {"Ohne Titel \u2013 die Kachel zeigt nur das Bild"}
+        </label>
 
         {art === "datei" ? (
           <>
@@ -2150,6 +2173,10 @@ function KategorieVerwaltung({
   const [fehler, setFehler] = useState("");
   const [namen, setNamen] = useState<Record<string, string>>({});
   const [reihe, setReihe] = useState<Record<string, number>>({});
+  const [beschreibungen, setBeschreibungen] = useState<Record<string, string>>({});
+  const [schnell, setSchnell] = useState<QuickLink[]>([]);
+  const [neuLabel, setNeuLabel] = useState("");
+  const [neuZiel, setNeuZiel] = useState("");
 
   const laden = useCallback(async () => {
     setLaedt(true);
@@ -2161,6 +2188,9 @@ function KategorieVerwaltung({
       setVersteckt(v.versteckt || []);
       const n = await api("kategorienamen");
       setNamen(n.namen || {});
+      setBeschreibungen(n.beschreibungen || {});
+      const q = await api("schnellzugriffe");
+      setSchnell(Array.isArray(q.schnellzugriffe) ? q.schnellzugriffe : []);
       const r = await api("kategoriereihe");
       setReihe(r.reihe || {});
     } catch (e) {
@@ -2193,6 +2223,72 @@ function KategorieVerwaltung({
       );
     } catch (e) {
       setFehler(e instanceof Error ? e.message : "Umbenennen fehlgeschlagen.");
+    }
+  };
+
+  // --- Schnellzugriffe der Startseite ---
+  const schnellSpeichern = async (liste: QuickLink[]) => {
+    setSchnell(liste);
+    setFehler("");
+    try {
+      await api("schnellzugriffe", {
+        method: "POST",
+        body: JSON.stringify({ schnellzugriffe: liste }),
+      });
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
+      await laden();
+    }
+  };
+
+  const schnellVerschieben = (i: number, richtung: -1 | 1) => {
+    const ziel = i + richtung;
+    if (ziel < 0 || ziel >= schnell.length) return;
+    const neu = [...schnell];
+    const [bewegt] = neu.splice(i, 1);
+    neu.splice(ziel, 0, bewegt);
+    schnellSpeichern(neu);
+  };
+
+  const schnellEntfernen = (i: number) => {
+    if (!window.confirm("Diesen Schnellzugriff entfernen?")) return;
+    schnellSpeichern(schnell.filter((_, n) => n !== i));
+  };
+
+  const schnellHinzufuegen = () => {
+    if (!neuZiel) {
+      setFehler("Bitte ein Ziel ausw\u00E4hlen.");
+      return;
+    }
+    const kat = alleKats.find((k) => k.slug === neuZiel);
+    const label = neuLabel.trim() || kat?.title || neuZiel;
+    const eintrag: QuickLink = {
+      label,
+      to: neuZiel.startsWith("/") ? neuZiel : "/bereich/" + neuZiel,
+      icon: kat?.icon || "Sparkles",
+    };
+    schnellSpeichern([...schnell, eintrag]);
+    setNeuLabel("");
+    setNeuZiel("");
+  };
+
+  // Den grauen Text unter der Ueberschrift der Kategorieseite aendern
+  const beschreibungAendern = async (slug: string, bisher: string) => {
+    const neu = window.prompt(
+      "Text unter der \u00DCberschrift (leer lassen = kein Text):",
+      bisher
+    );
+    if (neu === null) return;
+    const wert = neu.trim();
+    setFehler("");
+    try {
+      await api("kategorienamen", {
+        method: "POST",
+        body: JSON.stringify({ slug, beschreibung: wert }),
+      });
+      setBeschreibungen((b) => ({ ...b, [slug]: wert }));
+    } catch (e) {
+      setFehler(e instanceof Error ? e.message : "Speichern fehlgeschlagen.");
     }
   };
 
@@ -2408,6 +2504,15 @@ function KategorieVerwaltung({
         </button>
         <button
           type="button"
+          onClick={() => beschreibungAendern(slug, beschreibungen[slug] ?? "")}
+          aria-label="Text unter der Ueberschrift aendern"
+          title="Text unter der \u00DCberschrift"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+        >
+          <Heading className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
           onClick={() => umschalten(slug, !aus)}
           className={
             "flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[12.5px] font-medium transition " +
@@ -2424,7 +2529,7 @@ function KategorieVerwaltung({
           ) : (
             <>
               <EyeOff className="h-4 w-4" />
-              Ausblenden
+              Entfernen
             </>
           )}
         </button>
@@ -2550,6 +2655,144 @@ function KategorieVerwaltung({
         </button>
       </div>
 
+      {versteckt.length > 0 ? (
+        <>
+          <h2 className="mb-2 text-[15px] font-semibold text-ink">
+            {"Entfernte Kategorien"}
+          </h2>
+          <p className="mb-3 text-[12.5px] text-ink-mute">
+            {"Diese sind in der App nicht mehr zu sehen. Mit \u201EZur\u00FCckholen\u201C kommen sie wieder."}
+          </p>
+          <div className="mb-6 space-y-2">
+            {[...eingebauteHaupt, ...eingebauteUnter]
+              .filter((k) => versteckt.includes(k.slug))
+              .map((k) => (
+                <div
+                  key={k.slug}
+                  className="flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3 opacity-70"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+                    <CategoryIcon name={k.icon} className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-ink">
+                    {namen[k.slug] || k.title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => umschalten(k.slug, false)}
+                    className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-taupe-400 bg-taupe-50 px-3 text-[12.5px] font-medium text-taupe-700 transition hover:bg-taupe-100"
+                  >
+                    <Eye className="h-4 w-4" />
+                    {"Zur\u00FCckholen"}
+                  </button>
+                </div>
+              ))}
+          </div>
+        </>
+      ) : null}
+
+      <h2 className="mb-2 text-[15px] font-semibold text-ink">
+        {"Schnellzugriff auf der Startseite"}
+      </h2>
+      <p className="mb-3 text-[12.5px] text-ink-mute">
+        {"Die Kacheln unter der \u00DCberschrift \u201ESchnellzugriff\u201C. Solange hier nichts steht, gelten die eingebauten."}
+      </p>
+
+      <div className="mb-3 space-y-2">
+        {schnell.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-greige-300 px-4 py-5 text-center text-[13px] text-ink-mute">
+            {"Noch nichts festgelegt \u2013 es gelten die eingebauten Kacheln."}
+          </div>
+        ) : (
+          schnell.map((q, i) => (
+            <div
+              key={q.to + "-" + i}
+              className="flex items-center gap-3 rounded-xl border border-greige-200 bg-white p-3"
+            >
+              <div className="flex shrink-0 flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={() => schnellVerschieben(i, -1)}
+                  disabled={i === 0}
+                  aria-label="Nach oben schieben"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100 disabled:opacity-30"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => schnellVerschieben(i, 1)}
+                  disabled={i === schnell.length - 1}
+                  aria-label="Nach unten schieben"
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-greige-200 text-ink-soft transition hover:bg-greige-100 disabled:opacity-30"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              </div>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+                <CategoryIcon name={q.icon} className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium text-ink">
+                  {q.label}
+                </span>
+                <span className="block truncate text-[11.5px] text-ink-mute">
+                  {q.to}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => schnellEntfernen(i)}
+                aria-label="Schnellzugriff entfernen"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="mb-6 rounded-xl border border-greige-200 bg-white p-3">
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          {"Ziel"}
+        </label>
+        <select
+          value={neuZiel}
+          onChange={(e) => setNeuZiel(e.target.value)}
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        >
+          <option value="">{"Bitte ausw\u00E4hlen"}</option>
+          <option value="/favoriten">{"Favoriten (eigene Seite)"}</option>
+          <option value="/termine">{"Termine (eigene Seite)"}</option>
+          {alleKats.map((k) => (
+            <option key={k.slug} value={k.slug}>
+              {k.parent ? "\u00A0\u00A0\u00A0\u21B3 " : ""}
+              {k.title}
+            </option>
+          ))}
+        </select>
+
+        <label className="mb-1.5 block text-[12.5px] font-medium text-ink-soft">
+          {"Beschriftung (optional)"}
+        </label>
+        <input
+          value={neuLabel}
+          onChange={(e) => setNeuLabel(e.target.value)}
+          placeholder="Leer lassen = Name der Kategorie"
+          className="mb-3 h-11 w-full rounded-md border border-greige-200 bg-offwhite px-3 text-[15px] outline-none focus:border-taupe-400"
+        />
+
+        <button
+          type="button"
+          onClick={schnellHinzufuegen}
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-taupe-500 text-[15px] font-medium text-offwhite transition hover:bg-taupe-600"
+        >
+          <Plus className="h-[18px] w-[18px]" />
+          {"Schnellzugriff hinzuf\u00FCgen"}
+        </button>
+      </div>
+
       <h2 className="mb-2 text-[15px] font-semibold text-ink">
         {"Dateien nach Kategorie"}
       </h2>
@@ -2582,17 +2825,19 @@ function KategorieVerwaltung({
         Eingebaute Kategorien
       </h2>
       <p className="mb-3 text-[12.5px] text-ink-mute">
-        {"Pfeile zum Sortieren, Stift zum Umbenennen, Auge zum Entfernen. Entfernte Kategorien lassen sich jederzeit zurueckholen. Unterordner stehen eingerueckt darunter."}
+        {"Pfeile zum Sortieren, Stift zum Umbenennen, \u201ET\u201C f\u00FCr den Text unter der \u00DCberschrift. Entfernte Kategorien stehen weiter unten und lassen sich zur\u00FCckholen."}
       </p>
       <div className="mb-6 space-y-2">
-        {sortiertNachReihe(eingebauteHaupt).map((k) => (
-          <div key={k.slug} className="space-y-2">
-            {eingebauteZeile(k.slug, k.title, k.icon, false)}
-            {eingebauteUnter
-              .filter((u) => u.parent === k.slug)
-              .map((u) => eingebauteZeile(u.slug, u.title, u.icon, true))}
-          </div>
-        ))}
+        {sortiertNachReihe(eingebauteHaupt)
+          .filter((k) => !versteckt.includes(k.slug))
+          .map((k) => (
+            <div key={k.slug} className="space-y-2">
+              {eingebauteZeile(k.slug, k.title, k.icon, false)}
+              {eingebauteUnter
+                .filter((u) => u.parent === k.slug && !versteckt.includes(u.slug))
+                .map((u) => eingebauteZeile(u.slug, u.title, u.icon, true))}
+            </div>
+          ))}
       </div>
 
       <h2 className="mb-3 text-[15px] font-semibold text-ink">
@@ -2637,6 +2882,17 @@ function KategorieVerwaltung({
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
               >
                 <Pencil className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  beschreibungAendern(k.slug, beschreibungen[k.slug] ?? "")
+                }
+                aria-label="Text unter der Ueberschrift aendern"
+                title="Text unter der \u00DCberschrift"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-mute transition hover:bg-greige-100 hover:text-ink"
+              >
+                <Heading className="h-4 w-4" />
               </button>
               <button
                 type="button"
@@ -2699,7 +2955,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: KATEGORIEN-SORTIEREN
+        Stand: SCHNELLZUGRIFF
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button
