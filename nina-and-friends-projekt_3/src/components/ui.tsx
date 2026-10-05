@@ -688,6 +688,78 @@ export function TrainingCard({ item }: { item: ContentItem }) {
   );
 }
 
+/* ---------- Terminkarte (im Admin gepflegte Termine) ---------- */
+
+export function TerminCard({
+  termin,
+}: {
+  termin: {
+    id: string;
+    titel: string;
+    untertitel?: string;
+    datum: string;
+    uhrzeit?: string;
+    link?: string;
+  };
+}) {
+  const d = new Date(termin.datum + "T12:00:00");
+  const datumLabel = Number.isNaN(d.getTime())
+    ? termin.datum
+    : String(d.getDate()).padStart(2, "0") +
+      "." +
+      String(d.getMonth() + 1).padStart(2, "0") +
+      ".";
+
+  const innen = (
+    <>
+      <div className="flex flex-col gap-2 p-4 pb-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-greige-100 text-taupe-600">
+          <CategoryIcon name="Users" className="h-5 w-5" />
+        </span>
+        <div className="mt-1">
+          <h3 className="text-[15.5px] font-semibold leading-tight text-ink">
+            {termin.titel}
+          </h3>
+          {termin.untertitel ? (
+            <p className="text-[13px] leading-snug text-ink-mute">
+              {termin.untertitel}
+            </p>
+          ) : null}
+        </div>
+        <div className="mt-1 space-y-1">
+          <span className="flex items-center gap-1.5 text-[12.5px] text-ink-soft">
+            <CalendarDays className="h-4 w-4 text-taupe-500" strokeWidth={1.8} />
+            {datumLabel}
+          </span>
+          <span className="flex items-center gap-1.5 text-[12.5px] text-ink-soft">
+            <Clock className="h-4 w-4 text-taupe-500" strokeWidth={1.8} />
+            {(termin.uhrzeit || "20:00") + " Uhr"}
+          </span>
+        </div>
+      </div>
+      <div className="relative mt-auto h-[74px]">
+        <PhotoPlaceholder theme="food" rounded="rounded-none" className="h-full w-full" />
+        <span className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-md bg-white/90 text-taupe-600 shadow-soft">
+          <CalendarDays className="h-4 w-4" strokeWidth={1.8} />
+        </span>
+      </div>
+    </>
+  );
+
+  const klassen =
+    "group relative flex w-[230px] shrink-0 snap-start flex-col overflow-hidden rounded-xl border border-greige-200 bg-white shadow-soft transition hover:border-taupe-300 sm:w-auto sm:flex-1";
+
+  // Mit Link wird die Karte anklickbar, sonst bleibt sie reine Anzeige
+  if (termin.link) {
+    return (
+      <a href={termin.link} target="_blank" rel="noreferrer" className={klassen}>
+        {innen}
+      </a>
+    );
+  }
+  return <div className={klassen}>{innen}</div>;
+}
+
 /* ---------- Info banner ---------- */
 
 export function InfoBanner({
