@@ -3267,7 +3267,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-offwhite">
       {/* Deploy-Kontrolle: Stichwort KATALOGORDNER */}
       <div className="mx-auto max-w-2xl px-4 pt-3 text-right text-[11px] text-ink-mute">
-        Stand: TERMINE-ADMIN
+        Stand: AUFGERAEUMT
       </div>
       <div className="mx-auto flex max-w-2xl gap-2 px-4 pt-4">
         <button

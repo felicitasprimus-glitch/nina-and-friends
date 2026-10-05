@@ -83,16 +83,10 @@ export const categories: Category[] = [
     description: "Freigegebene Fotos und Videos f\u00FCr deine Beitr\u00E4ge." },
   { slug: "der-loeffel", title: "Der L\u00F6ffel", icon: "Utensils",
     description: "Unsere Team-Zeitung mit Neuigkeiten und Geschichten." },
-  { slug: "rubriken-loeffel", title: "Rubriken auf dem L\u00F6ffel", icon: "LayoutList",
-    description: "Die einzelnen Rubriken der Team-Zeitung im \u00DCberblick." },
   { slug: "erklaerungen", title: "Erkl\u00E4rungen \u2013 wie mach ich das?", icon: "HelpCircle",
     description: "Schritt-f\u00FCr-Schritt-Anleitungen f\u00FCr Bestellungen, Tools und mehr." },
   { slug: "social-media", title: "Social-Media-Unterst\u00FCtzung", icon: "Share2",
     description: "Vorlagen, Bildideen und Captions f\u00FCr deine Kan\u00E4le." },
-  { slug: "externe-speaker", title: "Schulungen externe Speaker", icon: "Mic",
-    description: "Trainings und Impulse von G\u00E4sten au\u00DFerhalb des Teams." },
-  { slug: "garzeiten", title: "Garzeiten-\u00DCbersicht", icon: "Timer",
-    description: "Praktische Garzeiten f\u00FCr Stoneware und Zaubermeister." },
   { slug: "neue-produkte", title: "Neue Produkte", icon: "Sparkles",
     description: "Alle Neuheiten der Saison mit Bildern und Produktinfos." },
   { slug: "kataloge", title: "Kataloge", icon: "Library",
@@ -162,12 +156,6 @@ export const unterKategorien: Category[] = [
     title: "Fr\u00FChjahr/Sommer 2026", description: "Der Saisonkatalog als PDF und zum Online-Bl\u00E4ttern." },
   { slug: "kfs-preislisten", parent: "katalog-fs-26", icon: "ListChecks",
     title: "Preislisten", description: "Alle Preislisten zur Saison, auch die bebilderte Fassung." },
-  { slug: "kfs-produktinfos", parent: "katalog-fs-26", icon: "Boxes",
-    title: "Produktinfos & Schulung", description: "Produktfolien, Schulungsunterlagen und Details zu den Neuheiten." },
-  { slug: "kfs-bilder-videos", parent: "katalog-fs-26", icon: "Images",
-    title: "Bilder & Videos", description: "Fertige Bilder und Videos f\u00FCr deine Beitr\u00E4ge und Storys." },
-  { slug: "kfs-programme", parent: "katalog-fs-26", icon: "Gift",
-    title: "Programme & Aktionen", description: "Gastgeber-Bonusprogramm, Fast Track und die Startaktionen." },
 
   // --- Alles fuer deine Kochshow ---
   { slug: "ks-gastgebersuche", parent: "kochshow", icon: "UserSearch",
@@ -186,26 +174,16 @@ export const unterKategorien: Category[] = [
     title: "Feedback & KS-Planer", description: "Rueckmeldungen einholen und Shows planen." },
 
   // --- Aktuelles aus dem Monat ---
-  { slug: "ak-folien-juli", parent: "aktuelles", icon: "Presentation",
-    title: "Folien Juli", description: "Die Folien zur Juli-Aktion." },
-  { slug: "ak-angebotsfolien", parent: "aktuelles", icon: "Percent",
-    title: "Angebotsfolien ab 12.06.", description: "Folien zu den laufenden Angeboten." },
   { slug: "ak-teamfolien", parent: "aktuelles", icon: "FileStack",
     title: "Teamfolien Angebote", description: "Angebotsfolien fuer das Team." },
   { slug: "ak-gewuerzvideos", parent: "aktuelles", icon: "Video",
     title: "Gew\u00FCrzvideos", description: "Kurze Videos rund um die Gewuerze." },
-  { slug: "ak-bbq", parent: "aktuelles", icon: "Flame",
-    title: "BBQ", description: "Alles rund um Grillen und BBQ im Backofen." },
   { slug: "ak-berater-werden", parent: "aktuelles", icon: "UserPlus",
     title: "Berater werden", description: "Infos fuer Interessentinnen am Beraterinnen-Start." },
   { slug: "ak-juni", parent: "aktuelles", icon: "Calendar",
     title: "Juni", description: "Archiv: die Aktionen aus dem Juni." },
 
   // --- Schulungen ---
-  { slug: "su-weitere", parent: "schulungen", icon: "BookMarked",
-    title: "Weitere Schulungen", description: "Zusaetzliche Trainings und Aufzeichnungen." },
-  { slug: "su-produkte", parent: "schulungen", icon: "Boxes",
-    title: "Schulungen Produkte", description: "Produkttrainings im \u00DCberblick." },
 
   // --- Team ---
   { slug: "tm-inspirationen", parent: "team", icon: "Sparkle",
@@ -909,7 +887,7 @@ export const eingebauteDateien: EingebauteDatei[] = [
   {
     id: "fix-produktschulung-edelstahl",
     art: "link",
-    bereich: "kfs-produktinfos",
+    bereich: "kfs-kataloge",
     titel: "Produktschulung Edelstahl Kollektion",
     dateiname: "",
     typ: "link",
