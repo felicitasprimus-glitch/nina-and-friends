@@ -16,7 +16,7 @@ function dateiAusgabe(r) {
     id: r.id,
     art,
     bereich: r.bereich || "",
-    titel: r.titel || r.dateiname || "",
+    titel: r.ohneTitel ? "" : r.titel || r.dateiname || "",
     dateiname: r.dateiname || "",
     typ: r.typ || art,
     groesse: r.groesse || 0,
